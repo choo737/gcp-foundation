@@ -15,7 +15,7 @@ locals {
   project_prefix       = var.project_suffix != "" ? "${var.prefix}-${var.project_suffix}" : var.prefix
   dataset_prefix       = replace(var.prefix, "-", "_")
   parent_folder        = "folders/${replace(var.data_folder_id, "folders/", "")}"
-  effective_kms_key_id = coalesce(var.kms_key_id, "")
+  effective_kms_key_id = var.kms_key_id != null ? trimspace(var.kms_key_id) : ""
   use_cmek             = local.effective_kms_key_id != ""
   all_masked_readers   = distinct(concat(var.masked_readers, var.bi_analysts))
 
@@ -188,12 +188,28 @@ data "google_bigquery_default_service_account" "bi" {
   depends_on = [time_sleep.compute_api_propagation]
 }
 
+resource "time_sleep" "service_agent_propagation" {
+  count = local.use_cmek ? 1 : 0
+
+  create_duration = var.propagation_wait_seconds
+
+  depends_on = [
+    data.google_storage_project_service_account.core,
+    data.google_bigquery_default_service_account.core,
+    data.google_bigquery_default_service_account.domain,
+    data.google_bigquery_default_service_account.etl,
+    data.google_bigquery_default_service_account.bi,
+  ]
+}
+
 resource "google_kms_crypto_key_iam_member" "storage_core_cmek" {
   count = local.use_cmek ? 1 : 0
 
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
   member        = "serviceAccount:${data.google_storage_project_service_account.core[0].email_address}"
+
+  depends_on = [time_sleep.service_agent_propagation]
 }
 
 resource "google_kms_crypto_key_iam_member" "bq_core_cmek" {
@@ -202,6 +218,8 @@ resource "google_kms_crypto_key_iam_member" "bq_core_cmek" {
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
   member        = data.google_bigquery_default_service_account.core[0].member
+
+  depends_on = [time_sleep.service_agent_propagation]
 }
 
 resource "google_kms_crypto_key_iam_member" "bq_domain_cmek" {
@@ -210,6 +228,8 @@ resource "google_kms_crypto_key_iam_member" "bq_domain_cmek" {
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
   member        = data.google_bigquery_default_service_account.domain[each.key].member
+
+  depends_on = [time_sleep.service_agent_propagation]
 }
 
 resource "google_kms_crypto_key_iam_member" "bq_etl_cmek" {
@@ -218,6 +238,8 @@ resource "google_kms_crypto_key_iam_member" "bq_etl_cmek" {
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
   member        = data.google_bigquery_default_service_account.etl[0].member
+
+  depends_on = [time_sleep.service_agent_propagation]
 }
 
 resource "google_kms_crypto_key_iam_member" "bq_bi_cmek" {
@@ -226,6 +248,8 @@ resource "google_kms_crypto_key_iam_member" "bq_bi_cmek" {
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
   member        = data.google_bigquery_default_service_account.bi[0].member
+
+  depends_on = [time_sleep.service_agent_propagation]
 }
 
 resource "time_sleep" "cmek_iam_propagation" {

@@ -7,7 +7,7 @@ provider "google-beta" {
 }
 
 locals {
-  effective_kms_key_id = coalesce(var.kms_key_id, "")
+  effective_kms_key_id = var.kms_key_id != null ? trimspace(var.kms_key_id) : ""
   use_cmek             = local.effective_kms_key_id != ""
   dataset_prefix       = replace(var.prefix, "-", "_")
 
@@ -77,6 +77,15 @@ resource "google_project_service_identity" "dataplex_agent" {
   service  = "dataplex.googleapis.com"
 }
 
+resource "time_sleep" "service_identity_propagation" {
+  create_duration = var.propagation_wait_seconds
+
+  depends_on = [
+    google_project_service_identity.dataform_agent,
+    google_project_service_identity.dataplex_agent,
+  ]
+}
+
 resource "google_service_account" "dataform_etl" {
   project      = var.etl_compute_project_id
   account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-dataform-etl"), 0, 30), "-")
@@ -88,12 +97,16 @@ resource "google_service_account_iam_member" "dataform_agent_token_creator" {
   service_account_id = google_service_account.dataform_etl.name
   role               = "roles/iam.serviceAccountTokenCreator"
   member             = google_project_service_identity.dataform_agent.member
+
+  depends_on = [time_sleep.service_identity_propagation]
 }
 
 resource "google_service_account_iam_member" "dataform_agent_sa_user" {
   service_account_id = google_service_account.dataform_etl.name
   role               = "roles/iam.serviceAccountUser"
   member             = google_project_service_identity.dataform_agent.member
+
+  depends_on = [time_sleep.service_identity_propagation]
 }
 
 resource "google_secret_manager_secret_iam_member" "dataform_git_token" {
@@ -102,6 +115,8 @@ resource "google_secret_manager_secret_iam_member" "dataform_git_token" {
   secret_id = local.git_secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = google_project_service_identity.dataform_agent.member
+
+  depends_on = [time_sleep.service_identity_propagation]
 }
 
 resource "google_bigquery_dataset_iam_member" "dataform_etl_bronze_viewer" {
@@ -151,6 +166,8 @@ resource "google_bigquery_datapolicy_data_policy_iam_member" "dataplex_masked_re
   data_policy_id = local.effective_data_policy_short_id
   role           = "roles/bigquerydatapolicy.maskedReader"
   member         = google_project_service_identity.dataplex_agent.member
+
+  depends_on = [time_sleep.service_identity_propagation]
 }
 
 resource "google_bigquery_dataset_iam_member" "dataplex_gold_viewer" {
@@ -158,6 +175,8 @@ resource "google_bigquery_dataset_iam_member" "dataplex_gold_viewer" {
   dataset_id = var.primary_gold_dataset_id
   role       = "roles/bigquery.dataViewer"
   member     = google_project_service_identity.dataplex_agent.member
+
+  depends_on = [time_sleep.service_identity_propagation]
 }
 
 data "google_bigquery_default_service_account" "etl" {
@@ -172,6 +191,8 @@ resource "google_kms_crypto_key_iam_member" "dataform_agent_cmek" {
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
   member        = google_project_service_identity.dataform_agent.member
+
+  depends_on = [time_sleep.service_identity_propagation]
 }
 
 resource "google_kms_crypto_key_iam_member" "dataform_etl_cmek" {
@@ -324,6 +345,13 @@ resource "google_bigquery_table" "pos_orders_cdc" {
       description = "Last CDC update timestamp."
     }
   ])
+
+  dynamic "encryption_configuration" {
+    for_each = local.use_cmek ? [local.effective_kms_key_id] : []
+    content {
+      kms_key_name = encryption_configuration.value
+    }
+  }
 }
 
 resource "google_bigquery_table" "crm_customers_cdc" {
@@ -375,6 +403,13 @@ resource "google_bigquery_table" "crm_customers_cdc" {
       description = "Last CDC update timestamp."
     }
   ])
+
+  dynamic "encryption_configuration" {
+    for_each = local.use_cmek ? [local.effective_kms_key_id] : []
+    content {
+      kms_key_name = encryption_configuration.value
+    }
+  }
 }
 
 resource "google_bigquery_table" "masked_customers_canary" {
@@ -423,6 +458,13 @@ resource "google_bigquery_table" "masked_customers_canary" {
       description = "Record update timestamp."
     }
   ])
+
+  dynamic "encryption_configuration" {
+    for_each = local.use_cmek ? [local.effective_kms_key_id] : []
+    content {
+      kms_key_name = encryption_configuration.value
+    }
+  }
 }
 
 resource "google_bigquery_dataset" "ops_telemetry" {

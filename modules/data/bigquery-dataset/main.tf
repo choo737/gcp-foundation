@@ -8,7 +8,7 @@ resource "google_bigquery_dataset" "this" {
   labels                     = var.labels
 
   dynamic "default_encryption_configuration" {
-    for_each = var.kms_key_name != null && var.kms_key_name != "" ? [var.kms_key_name] : []
+    for_each = var.kms_key_name != null && trimspace(var.kms_key_name) != "" ? [trimspace(var.kms_key_name)] : []
     content {
       kms_key_name = default_encryption_configuration.value
     }

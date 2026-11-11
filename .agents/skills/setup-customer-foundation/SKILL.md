@@ -157,7 +157,7 @@ Verify FinOps resources from Stage 01:
 
 ```bash
 bq show --dataset "${AUDIT_PROJECT_ID}:${PREFIX//-/_}_billing_export"
-gcloud billing budgets list --billing-account="${BILLING_ACCOUNT}"
+gcloud billing budgets list --billing-account="${BILLING_ACCOUNT}" --billing-project="${AUDIT_PROJECT_ID}"
 gcloud pubsub topics describe "${PREFIX}-finops-budget-alerts" --project="${AUDIT_PROJECT_ID}"
 ```
 

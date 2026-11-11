@@ -139,6 +139,27 @@ class AgenticContextAndToolingTest(unittest.TestCase):
                 self.assertIn('resource "time_sleep" "dataplex_iam_propagation"', text)
                 self.assertIn("var.dataplex_iam_propagation_seconds", text)
                 self.assertIn("time_sleep.dataplex_iam_propagation", text)
+                self.assertIn('resource "time_sleep" "service_identity_propagation"', text)
+                self.assertIn("encryption_configuration", text)
+
+    def test_no_empty_string_coalesce_in_terraform(self) -> None:
+        bad_coalesce = re.compile(r'coalesce\([^)]*""')
+        skip_dirs = {".git", ".terraform", "__pycache__", ".pytest_cache"}
+        for tf_path in sorted(REPO_ROOT.rglob("*.tf")):
+            if any(part in skip_dirs for part in tf_path.parts):
+                continue
+            text = tf_path.read_text(encoding="utf-8")
+            rel = str(tf_path.relative_to(REPO_ROOT))
+            with self.subTest(file=rel):
+                self.assertIsNone(
+                    bad_coalesce.search(text),
+                    f"Empty-string coalesce found in {rel}",
+                )
+
+        platform_main = (
+            REPO_ROOT / "data" / "enterprise" / "01-platform" / "main.tf"
+        ).read_text(encoding="utf-8")
+        self.assertIn('resource "time_sleep" "service_agent_propagation"', platform_main)
 
     def test_skills_have_valid_frontmatter(self) -> None:
         fm_re = re.compile(

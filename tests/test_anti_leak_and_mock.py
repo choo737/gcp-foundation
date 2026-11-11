@@ -105,6 +105,8 @@ def _iter_repo_files() -> list[Path]:
             continue
         if path.name in SKIP_FILES:
             continue
+        if path.name.endswith((".tfstate", ".tfstate.backup")) or ".tfstate." in path.name:
+            continue
         files.append(path)
     return files
 

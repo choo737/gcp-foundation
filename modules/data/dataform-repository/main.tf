@@ -32,7 +32,7 @@ resource "google_dataform_repository" "this" {
   name            = var.repository_name
   display_name    = coalesce(var.display_name, var.repository_name)
   service_account = local.effective_sa_email
-  kms_key_name    = var.kms_key_name != "" ? var.kms_key_name : null
+  kms_key_name    = var.kms_key_name != null && trimspace(var.kms_key_name) != "" ? trimspace(var.kms_key_name) : null
   deletion_policy = var.deletion_policy
   labels          = var.labels
 
