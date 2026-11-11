@@ -2,6 +2,16 @@
 
 This repository deploys a modular Google Cloud landing zone and Medallion data platform using Terraform.
 
+## Create Your Private Repository (Do Not Fork Publicly)
+
+- GitHub forces normal forks of public repos to stay public.
+- Pull requests in forks also default back to the public upstream.
+- Instead, click **Use this template** on GitHub or run:
+
+```bash
+gh repo create acme-corp/gcp-foundation --private --template choo737/gcp-foundation --clone
+```
+
 ## Choose Your Entry Point
 
 | Path | Target Scope | Stage Sequence |
