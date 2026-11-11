@@ -60,6 +60,36 @@ variable "enable_org_policies" {
   description = "Whether to enforce folder-level Org Policy guardrails."
 }
 
+variable "allowed_policy_member_domains" {
+  type        = list(string)
+  default     = []
+  description = "Allowed Workspace customer IDs or principal sets for iam.allowedPolicyMemberDomains."
+}
+
+variable "allowed_contact_domains" {
+  type        = list(string)
+  default     = []
+  description = "Allowed email domains for essentialcontacts.allowedContactDomains."
+}
+
+variable "denied_storage_auth_types" {
+  type        = list(string)
+  default     = ["in:ALL_HMAC_SIGNED_REQUESTS"]
+  description = "Denied Cloud Storage auth types for storage.restrictAuthTypes."
+}
+
+variable "allowed_cloud_run_ingress" {
+  type        = list(string)
+  default     = ["is:internal-and-cloud-load-balancing"]
+  description = "Allowed Cloud Run ingress settings for run.allowedIngress."
+}
+
+variable "allowed_cloud_functions_ingress" {
+  type        = list(string)
+  default     = ["is:ALLOW_INTERNAL_AND_GCLB"]
+  description = "Allowed Cloud Functions ingress settings for cloudfunctions.allowedIngressSettings."
+}
+
 variable "retention_days" {
   type        = number
   default     = 1095

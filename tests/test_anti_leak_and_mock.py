@@ -28,6 +28,7 @@ LEAKED_IDENTIFIERS = (
     "641791" + "128082",
     "158706" + "953990",
     "016" + "D20",
+    "C01" + "hil3w1",
 )
 
 SECRET_PATTERNS = (

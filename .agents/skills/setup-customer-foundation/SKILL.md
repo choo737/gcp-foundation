@@ -49,11 +49,12 @@ Ask the customer to select an adoption path first:
 
 Collect the required variables before creating `custom.auto.tfvars`:
 
-- **Path 1**: `parent_id`, `billing_account`, `region`, `prefix`, `project_suffix`, `enable_billing_budget`, `monthly_budget_amount`, `budget_currency_code`, `enable_reservations`, `masked_readers`, `bi_analysts`.
+- **Path 1**: `parent_id`, `billing_account`, `region`, `prefix`, `project_suffix`, `enable_org_policies`, `allowed_policy_member_domains`, `allowed_contact_domains`, `enable_billing_budget`, `monthly_budget_amount`, `budget_currency_code`, `enable_reservations`, `masked_readers`, `bi_analysts`.
 - **Path 2**: `data_folder_id`, `billing_account`, `region`, `prefix`, `project_suffix`, optional `kms_key_id`, `enable_reservations`, `masked_readers`, `bi_analysts`.
 - **Path 3**: `project_id`, `region`, `prefix`, `masked_readers`.
 - Keep `prefix` to 3-6 lowercase alphanumeric chars and set `project_suffix` (for example `dev01`) to avoid 30-day soft-delete collisions.
 - Offer optional `gcloud` lookup commands (`gcloud organizations list`, `gcloud billing accounts list`) only if asked.
+- If `enable_org_policies = true`, collect `allowed_policy_member_domains` (Workspace Customer ID via `gcloud organizations list`) and `allowed_contact_domains`.
 
 Ask whether this is a **production** or **ephemeral test** deployment:
 
@@ -62,7 +63,7 @@ Ask whether this is a **production** or **ephemeral test** deployment:
 
 Map customer inputs to each stage's `custom.auto.tfvars`:
 
-- `foundation/01-org-governance/custom.auto.tfvars`: `parent_id`, `billing_account`, `region`, `prefix`, `project_suffix`, `enable_billing_budget`, `monthly_budget_amount`, `budget_currency_code`, lifecycle flags.
+- `foundation/01-org-governance/custom.auto.tfvars`: `parent_id`, `billing_account`, `region`, `prefix`, `project_suffix`, `enable_org_policies`, `allowed_policy_member_domains`, `allowed_contact_domains`, `enable_billing_budget`, `monthly_budget_amount`, `budget_currency_code`, lifecycle flags.
 - `foundation/02-security-network/custom.auto.tfvars`: optional `enable_cmek`, `enable_vpc`, `enable_psc`, `enable_vpc_sc`, `enforce_vpc_sc`, `project_deletion_policy`.
 - `data/enterprise/01-platform/custom.auto.tfvars`: `domain_marts`, `primary_domain`, `enable_reservations`, `masked_readers`, `bi_analysts` (plus `data_folder_id`, `billing_account`, `prefix`, `project_suffix` for Path 2).
 - `data/enterprise/02-governance-ops/custom.auto.tfvars`: `medallion_git_url`, `git_token_secret_version` (optional), `enable_scheduled_workflow`, `delete_contents_on_destroy`.
@@ -159,6 +160,13 @@ Verify FinOps resources from Stage 01:
 bq show --dataset "${AUDIT_PROJECT_ID}:${PREFIX//-/_}_billing_export"
 gcloud billing budgets list --billing-account="${BILLING_ACCOUNT}" --billing-project="${AUDIT_PROJECT_ID}"
 gcloud pubsub topics describe "${PREFIX}-finops-budget-alerts" --project="${AUDIT_PROJECT_ID}"
+```
+
+When `enable_org_policies = true`, list active Org Policy rules on the root folder:
+
+```bash
+gcloud resource-manager org-policies list --folder="${ROOT_FOLDER_NUMERIC_ID}"
+gcloud org-policies list --folder="${ROOT_FOLDER_NUMERIC_ID}" --billing-project="${AUDIT_PROJECT_ID}"
 ```
 
 Seed two synthetic rows per table before verifying masking and Dataform:

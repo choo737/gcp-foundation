@@ -276,6 +276,90 @@ class AgenticContextAndToolingTest(unittest.TestCase):
             )
             self.assertEqual(stat.S_IMODE(out_path.stat().st_mode), 0o600)
 
+    def test_enterprise_org_policy_baseline_coverage(self) -> None:
+        boolean_constraints = (
+            "iam.disableServiceAccountKeyCreation",
+            "iam.disableServiceAccountKeyUpload",
+            "iam.automaticIamGrantsForDefaultServiceAccounts",
+            "iam.disableAuditLoggingExemption",
+            "iam.restrictCrossProjectServiceAccountLienRemoval",
+            "storage.uniformBucketLevelAccess",
+            "storage.publicAccessPrevention",
+            "storage.secureHttpTransport",
+            "sql.restrictPublicIp",
+            "sql.restrictAuthorizedNetworks",
+            "bigquery.disableBQOmniAWS",
+            "bigquery.disableBQOmniAzure",
+            "ainotebooks.restrictPublicIp",
+            "compute.requireShieldedVm",
+            "compute.skipDefaultNetworkCreation",
+            "compute.requireOsLogin",
+            "compute.disableSerialPortAccess",
+            "compute.disableGuestAttributesAccess",
+            "compute.disableNestedVirtualization",
+            "compute.disableVpcExternalIpv6",
+            "compute.disableInternetNetworkEndpointGroup",
+            "compute.setNewProjectDefaultToZonalDNSOnly",
+            "cloudbuild.disableCreateDefaultServiceAccount",
+            "run.managed.requireInvokerIam",
+            "container.managed.enablePrivateNodes",
+        )
+        deny_all_constraints = (
+            "compute.vmExternalIpAccess",
+            "compute.vmCanIpForward",
+            "iam.allowServiceAccountCredentialLifetimeExtension",
+        )
+        list_value_constraints = (
+            "gcp.resourceLocations",
+            "iam.allowedPolicyMemberDomains",
+            "essentialcontacts.allowedContactDomains",
+            "storage.restrictAuthTypes",
+            "run.allowedIngress",
+            "cloudfunctions.allowedIngressSettings",
+        )
+        self.assertEqual(
+            len(boolean_constraints) + len(deny_all_constraints) + len(list_value_constraints),
+            34,
+        )
+
+        mod_dir = REPO_ROOT / "modules" / "foundation" / "logging-guardrails"
+        mod_vars = (mod_dir / "variables.tf").read_text(encoding="utf-8")
+        mod_main = (mod_dir / "main.tf").read_text(encoding="utf-8")
+        mod_outs = (mod_dir / "outputs.tf").read_text(encoding="utf-8")
+
+        for constraint in boolean_constraints + deny_all_constraints:
+            with self.subTest(constraint=constraint):
+                self.assertIn(f'"{constraint}"', mod_vars)
+
+        for constraint in list_value_constraints:
+            with self.subTest(constraint=constraint):
+                self.assertIn(f"/policies/{constraint}", mod_main)
+
+        self.assertIn("normalized_policy_member_domains", mod_main)
+        self.assertIn("normalized_contact_domains", mod_main)
+        self.assertIn('output "enforced_org_policy_names"', mod_outs)
+
+        stage_dir = REPO_ROOT / "foundation" / "01-org-governance"
+        stage_vars = (stage_dir / "variables.tf").read_text(encoding="utf-8")
+        stage_main = (stage_dir / "main.tf").read_text(encoding="utf-8")
+        stage_outs = (stage_dir / "outputs.tf").read_text(encoding="utf-8")
+
+        list_vars = (
+            "allowed_policy_member_domains",
+            "allowed_contact_domains",
+            "denied_storage_auth_types",
+            "allowed_cloud_run_ingress",
+            "allowed_cloud_functions_ingress",
+        )
+        for var_name in list_vars:
+            with self.subTest(variable=var_name):
+                self.assertIn(f'variable "{var_name}"', mod_vars)
+                self.assertIn(f'variable "{var_name}"', stage_vars)
+                self.assertRegex(stage_main, rf"{var_name}\s*=\s*var\.{var_name}")
+
+        self.assertRegex(stage_main, r"allowed_resource_locations\s*=\s*\[\"in:\$\{var\.region\}-locations\"\]")
+        self.assertIn('output "enforced_org_policy_names"', stage_outs)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -59,16 +59,21 @@ module "logging_guardrails" {
     google = google.billing_quota
   }
 
-  audit_project_id              = module.audit_project.project_id
-  folder_id                     = module.folder_hierarchy.root_folder_id
-  prefix                        = var.prefix
-  region                        = var.region
-  retention_days                = var.retention_days
-  lock_audit_bucket             = var.lock_audit_bucket
-  enable_folder_sink            = true
-  enable_data_access_audit_logs = var.enable_data_access_audit_logs
-  enable_org_policies           = var.enable_org_policies
-  allowed_resource_locations    = ["in:${var.region}-locations"]
+  audit_project_id                = module.audit_project.project_id
+  folder_id                       = module.folder_hierarchy.root_folder_id
+  prefix                          = var.prefix
+  region                          = var.region
+  retention_days                  = var.retention_days
+  lock_audit_bucket               = var.lock_audit_bucket
+  enable_folder_sink              = true
+  enable_data_access_audit_logs   = var.enable_data_access_audit_logs
+  enable_org_policies             = var.enable_org_policies
+  allowed_resource_locations      = ["in:${var.region}-locations"]
+  allowed_policy_member_domains   = var.allowed_policy_member_domains
+  allowed_contact_domains         = var.allowed_contact_domains
+  denied_storage_auth_types       = var.denied_storage_auth_types
+  allowed_cloud_run_ingress       = var.allowed_cloud_run_ingress
+  allowed_cloud_functions_ingress = var.allowed_cloud_functions_ingress
 
   depends_on = [time_sleep.audit_api_propagation]
 }

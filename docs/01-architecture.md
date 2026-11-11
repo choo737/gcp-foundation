@@ -36,6 +36,9 @@ organizations/<org_id> (or folders/<parent_id>)
 - Every project disables default VPC creation (`auto_create_network = false`).
 - Production projects set `deletion_policy = "PREVENT"` and folders set `deletion_protection = true`.
 - Foundation stage 01 configures FinOps monthly budgets, `billing_export` dataset, and cost-allocation tags.
+- Foundation stage 01 enforces a 34-policy Org Policy baseline when `enable_org_policies = true`.
+- Guardrails cover Domain Restricted Sharing, Cloud SQL public IP blocks, and VM external IP blocks.
+- Serverless rules restrict Cloud Run and Cloud Functions ingress to internal and load balancer traffic.
 - Foundation stage 02 configures regional CMEK and optional private `googleapis.com` PSC DNS.
 - BigQuery slot reservations default to `slot_capacity = 0` with `ENTERPRISE` edition autoscaling.
 - No stage shares Terraform state; stages pass outputs through `scripts/link-stages.sh` into `00_linked.auto.tfvars.json`.

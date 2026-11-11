@@ -73,6 +73,16 @@ output "project_deletion_policy" {
   description = "Project deletion policy propagated downstream."
 }
 
+output "log_sink_writer_identity" {
+  value       = module.logging_guardrails.log_sink_writer_identity
+  description = "Writer service account identity of the folder audit sink."
+}
+
+output "enforced_org_policy_names" {
+  value       = module.logging_guardrails.enforced_org_policy_names
+  description = "Sorted resource names of enforced folder Org Policies."
+}
+
 output "delete_contents_on_destroy" {
   value       = var.delete_contents_on_destroy
   description = "Destructive cleanup flag propagated downstream."

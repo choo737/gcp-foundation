@@ -41,6 +41,12 @@ If you use a coding agent, it follows [.agents/skills/setup-customer-foundation/
 - `scripts/link-stages.sh`: Links Terraform outputs from upstream stages into downstream `00_linked.auto.tfvars.json`.
 - `docs/`: Architecture, entry points, and Cloudera-to-BigQuery migration notes.
 
+## Security & Governance Baseline
+
+- Foundation stage 01 enforces a 34-policy Org Policy baseline when `enable_org_policies = true`.
+- Guardrails enforce Domain Restricted Sharing, Cloud SQL public IP blocks, and VM external IP blocks.
+- Serverless rules restrict Cloud Run and Cloud Functions ingress to internal and load balancer traffic.
+
 ## Quick Verification
 
 ```bash
