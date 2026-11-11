@@ -63,7 +63,12 @@ variable "kms_key_name" {
 variable "git_token_secret_version" {
   type        = string
   default     = ""
-  description = "Optional Secret Manager secret version for private Git access."
+  description = "Secret Manager secret version enabling Git remote linking (empty deploys standalone)."
+
+  validation {
+    condition     = var.git_token_secret_version == "" || can(regex("^projects/[^/]+/secrets/[^/]+/versions/[^/]+$", var.git_token_secret_version))
+    error_message = "git_token_secret_version must be empty or projects/<project>/secrets/<secret>/versions/<version>."
+  }
 }
 
 variable "default_database" {

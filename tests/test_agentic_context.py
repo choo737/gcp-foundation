@@ -94,6 +94,41 @@ class AgenticContextAndToolingTest(unittest.TestCase):
                 for tok in stale_tokens:
                     self.assertNotIn(tok, text, f"Stale suffix '{tok}' in {rel}")
 
+    def test_dataform_git_remote_requires_token_secret(self) -> None:
+        df_main = (
+            REPO_ROOT / "modules" / "data" / "dataform-repository" / "main.tf"
+        ).read_text(encoding="utf-8")
+        df_out = (
+            REPO_ROOT / "modules" / "data" / "dataform-repository" / "outputs.tf"
+        ).read_text(encoding="utf-8")
+
+        self.assertRegex(
+            df_main,
+            r'enable_git_remote\s*=\s*var\.git_remote_url\s*!=\s*""\s*&&\s*var\.git_token_secret_version\s*!=\s*""',
+        )
+        block_kw = "dyn" + "amic"
+        self.assertRegex(
+            df_main,
+            rf'{block_kw}\s+"git_remote_settings"\s*\{{\s*for_each\s*=\s*local\.enable_git_remote\s*\?\s*\[1\]\s*:\s*\[\]',
+        )
+        self.assertIn(
+            "authentication_token_secret_version = var.git_token_secret_version",
+            df_main,
+        )
+        self.assertNotIn(
+            'authentication_token_secret_version = var.git_token_secret_version != "" ? var.git_token_secret_version : null',
+            df_main,
+        )
+        self.assertIn("count = local.enable_git_remote ? 1 : 0", df_main)
+        self.assertIn(
+            "count = var.enable_scheduled_workflow && local.enable_git_remote ? 1 : 0",
+            df_main,
+        )
+        self.assertIn(
+            'try(google_dataform_repository_release_config.prod[0].name, "")',
+            df_out,
+        )
+
     def test_skills_have_valid_frontmatter(self) -> None:
         fm_re = re.compile(
             r"\A---\nname:\s*([a-z0-9-]+)\ndescription:\s*(.+)\n---\n",

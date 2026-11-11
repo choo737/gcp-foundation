@@ -35,7 +35,8 @@ Start directly at `data/enterprise/01-platform` when an existing landing zone pr
 Use `data/sandbox` when you have one GCP project and want fast Medallion validation.
 
 - Required permissions: Project Owner or Editor plus IAM Admin on one project.
-- Inputs: `project_id`, `region`, `prefix`, and `masked_readers`.
+- Inputs: `project_id`, `region`, `prefix`, `masked_readers`, and optional `git_token_secret_version`.
+- Leave `git_token_secret_version` empty for standalone Dataform, or supply a Secret Manager version for Git sync.
 - Key outputs: Four datasets, `LAST_FOUR_CHARACTERS` masking tag, Dataplex scan, and Dataform repo.
 
 ## Production vs Ephemeral Lifecycle Flags

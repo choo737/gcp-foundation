@@ -28,7 +28,8 @@ If you use a coding agent, it follows [.agents/skills/setup-customer-foundation/
 2. Ask for your adoption path, GCP IDs, `prefix`, `project_suffix`, budget target, and lifecycle flags.
 3. Verify active `gcloud` authentication (`gcloud config get-value account` or `GOOGLE_OAUTH_ACCESS_TOKEN`).
 4. Write customer values into gitignored `custom.auto.tfvars` and link stages via `scripts/link-stages.sh` (`00_linked.auto.tfvars.json`).
-5. Seed test rows and run post-deploy checks on FinOps, masking, Dataplex scans, and Dataform runs.
+5. Leave `git_token_secret_version` empty for standalone Dataform, or store a PAT in Secret Manager.
+6. Seed test rows and run post-deploy checks on FinOps, masking, Dataplex scans, and Dataform runs.
 
 ## Repository Structure
 

@@ -105,7 +105,12 @@ variable "git_release_commitish" {
 variable "git_token_secret_version" {
   type        = string
   default     = ""
-  description = "Optional Secret Manager secret version for private Git authentication."
+  description = "Secret Manager secret version for Dataform Git sync (empty uses standalone mode)."
+
+  validation {
+    condition     = var.git_token_secret_version == "" || can(regex("^projects/[^/]+/secrets/[^/]+/versions/[^/]+$", var.git_token_secret_version))
+    error_message = "git_token_secret_version must be empty or projects/<project>/secrets/<secret>/versions/<version>."
+  }
 }
 
 variable "enable_scheduled_workflow" {

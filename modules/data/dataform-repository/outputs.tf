@@ -4,8 +4,8 @@ output "repository_name" {
 }
 
 output "release_config_name" {
-  value       = try(google_dataform_repository_release_config.prod[0].name, null)
-  description = "Dataform release configuration name, or null when unlinked."
+  value       = try(google_dataform_repository_release_config.prod[0].name, "")
+  description = "Dataform release configuration name, or empty string when unlinked."
 }
 
 output "service_account_email" {

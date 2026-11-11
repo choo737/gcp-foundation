@@ -39,9 +39,9 @@ locals {
   ])
 
   git_secret_id = (
-    var.git_token_secret_version != "" && length(split("/", var.git_token_secret_version)) >= 4
-    ? join("/", slice(split("/", var.git_token_secret_version), 0, 4))
-    : var.git_token_secret_version
+    var.git_token_secret_version != ""
+    ? regex("^(projects/[^/]+/secrets/[^/]+)/versions/", var.git_token_secret_version)[0]
+    : ""
   )
 }
 

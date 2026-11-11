@@ -10,6 +10,7 @@ resource "google_service_account" "etl" {
 locals {
   effective_sa_email = var.service_account_email != "" ? var.service_account_email : google_service_account.etl[0].email
   effective_database = var.default_database != "" ? var.default_database : var.project_id
+  enable_git_remote  = var.git_remote_url != "" && var.git_token_secret_version != ""
 
   compilation_vars = merge(
     {
@@ -36,17 +37,17 @@ resource "google_dataform_repository" "this" {
   labels          = var.labels
 
   dynamic "git_remote_settings" {
-    for_each = var.git_remote_url != "" ? [1] : []
+    for_each = local.enable_git_remote ? [1] : []
     content {
       url                                 = var.git_remote_url
       default_branch                      = var.git_default_branch
-      authentication_token_secret_version = var.git_token_secret_version != "" ? var.git_token_secret_version : null
+      authentication_token_secret_version = var.git_token_secret_version
     }
   }
 }
 
 resource "google_dataform_repository_release_config" "prod" {
-  count = var.git_remote_url != "" ? 1 : 0
+  count = local.enable_git_remote ? 1 : 0
 
   project       = var.project_id
   region        = var.region
@@ -66,7 +67,7 @@ resource "google_dataform_repository_release_config" "prod" {
 }
 
 resource "google_dataform_repository_workflow_config" "scheduled" {
-  count = var.enable_scheduled_workflow && var.git_remote_url != "" ? 1 : 0
+  count = var.enable_scheduled_workflow && local.enable_git_remote ? 1 : 0
 
   project        = var.project_id
   region         = var.region

@@ -5,9 +5,9 @@ This module creates a Dataform repository, release config, and optional workflow
 ## Resources Managed
 
 - One dedicated `google_service_account` when `service_account_email` is empty.
-- One `google_dataform_repository` with optional `git_remote_settings` and `kms_key_name`.
-- One `google_dataform_repository_release_config` named `prod-main` pinned via `git_release_commitish`.
-- One optional `google_dataform_repository_workflow_config` when `enable_scheduled_workflow` is true.
+- One `google_dataform_repository` (standalone by default; links `git_remote_settings` when `git_token_secret_version` is set).
+- One `google_dataform_repository_release_config` named `prod-main` when Git remote linking is enabled.
+- One optional `google_dataform_repository_workflow_config` when `enable_scheduled_workflow` and Git remote linking are enabled.
 
 ## Usage
 

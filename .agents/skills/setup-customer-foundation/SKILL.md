@@ -65,10 +65,10 @@ Map customer inputs to each stage's `custom.auto.tfvars`:
 - `foundation/01-org-governance/custom.auto.tfvars`: `parent_id`, `billing_account`, `region`, `prefix`, `project_suffix`, `enable_billing_budget`, `monthly_budget_amount`, `budget_currency_code`, lifecycle flags.
 - `foundation/02-security-network/custom.auto.tfvars`: optional `enable_cmek`, `enable_vpc`, `enable_psc`, `enable_vpc_sc`, `enforce_vpc_sc`, `project_deletion_policy`.
 - `data/enterprise/01-platform/custom.auto.tfvars`: `domain_marts`, `primary_domain`, `enable_reservations`, `masked_readers`, `bi_analysts` (plus `data_folder_id`, `billing_account`, `prefix`, `project_suffix` for Path 2).
-- `data/enterprise/02-governance-ops/custom.auto.tfvars`: `medallion_git_url`, `enable_scheduled_workflow`, `delete_contents_on_destroy`.
-- `data/sandbox/custom.auto.tfvars`: `project_id`, `region`, `prefix`, `masked_readers`, `delete_contents_on_destroy`.
+- `data/enterprise/02-governance-ops/custom.auto.tfvars`: `medallion_git_url`, `git_token_secret_version` (optional), `enable_scheduled_workflow`, `delete_contents_on_destroy`.
+- `data/sandbox/custom.auto.tfvars`: `project_id`, `region`, `prefix`, `git_token_secret_version` (optional), `masked_readers`, `delete_contents_on_destroy`.
 
-## Step 2: Verify Credentials and Write Untracked Vars
+## Step 2: Verify Credentials, Git Secret, and Untracked Vars
 
 Check active authentication before running Terraform:
 
@@ -81,6 +81,26 @@ If using a named `gcloud` configuration without ADC, export a short-lived token:
 ```bash
 export GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth print-access-token --configuration=<config_name>)
 ```
+
+Decide how Dataform should run before writing `custom.auto.tfvars`:
+
+- **Standalone mode (default)**: Leave `git_token_secret_version = ""` to deploy a standalone Dataform repository in BigQuery Studio.
+- **Git-synced mode**: Set `git_token_secret_version` to a Secret Manager version so Dataform compiles `choo737/gcp-data-medallion`.
+- Never place Git tokens in `.tfvars` or Terraform state.
+
+To create a Secret Manager PAT via stdin without touching Terraform state:
+
+```bash
+gcloud services enable secretmanager.googleapis.com --project="${TARGET_PROJECT}"
+printf '%s' "${GITHUB_PAT}" | gcloud secrets create "${PREFIX}-git-pat" \
+  --project="${TARGET_PROJECT}" \
+  --replication-policy="automatic" \
+  --data-file=-
+```
+
+Pass `projects/${TARGET_PROJECT}/secrets/${PREFIX}-git-pat/versions/1` as `git_token_secret_version` in `custom.auto.tfvars`.
+In Path 1 Enterprise, set `TARGET_PROJECT` to `<prefix>-<suffix>-data-etl` right after `data/enterprise/01-platform` finishes.
+Destroying `data/enterprise/01-platform` removes `<prefix>-<suffix>-data-etl` and that secret automatically.
 
 Write customer inputs only into gitignored `custom.auto.tfvars` files.
 Never commit customer IDs into tracked files.
@@ -125,6 +145,12 @@ terraform -chdir=foundation/01-org-governance destroy
 Increment `project_suffix` (for example `dev01` to `dev02`) before re-running after project deletion.
 
 ## Step 4: Run Post-Deploy Verification
+
+If `bq` is missing from default `$PATH`, add the Cloud SDK bin path first:
+
+```bash
+command -v bq >/dev/null || export PATH="${HOME}/google-cloud-sdk/bin:${PATH}"
+```
 
 Verify FinOps resources from Stage 01:
 

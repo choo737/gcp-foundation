@@ -20,7 +20,7 @@ Always load `.agents/skills/setup-customer-foundation/SKILL.md` when helping a u
 3. **Confirm path and lifecycle**: Ask for Path 1, Path 2, or Path 3, plus production vs test flags.
 4. **Validate prefix and suffix**: Keep `prefix` to 3-6 chars and set `project_suffix` (`dev01`) to avoid 30-day soft-delete collisions.
 5. **Verify GCP auth**: Check `gcloud config get-value account` and support `GOOGLE_OAUTH_ACCESS_TOKEN` for named configs.
-6. **Store inputs locally**: Write stage variables to gitignored `custom.auto.tfvars`, which overrides `00_linked.auto.tfvars.json`.
+6. **Store inputs and secrets safely**: Write inputs to `custom.auto.tfvars` and store Dataform PATs only in Secret Manager.
 7. **Link and verify**: Chain stages with `scripts/link-stages.sh`, seed test rows, verify masking, Dataplex, and Dataform `SUCCEEDED`.
 
 ## Hard Contracts
