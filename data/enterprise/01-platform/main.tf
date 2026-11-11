@@ -19,10 +19,10 @@ locals {
   use_cmek             = local.effective_kms_key_id != ""
   all_masked_readers   = distinct(concat(var.masked_readers, var.bi_analysts))
 
-  dp_gov_project_id     = "${local.project_prefix}-dp-gov"
-  dp_st_core_project_id = "${local.project_prefix}-dp-st-core"
-  dp_cp_etl_project_id  = "${local.project_prefix}-dp-cp-etl"
-  dp_cp_bi_project_id   = "${local.project_prefix}-dp-cp-bi"
+  data_gov_project_id  = "${local.project_prefix}-data-gov"
+  data_core_project_id = "${local.project_prefix}-data-core"
+  data_etl_project_id  = "${local.project_prefix}-data-etl"
+  data_bi_project_id   = "${local.project_prefix}-data-bi"
 
   core_datasets = {
     bronze_raw        = "${local.dataset_prefix}_bronze_raw"
@@ -43,10 +43,11 @@ resource "google_folder" "compute" {
   deletion_protection = var.deletion_protection
 }
 
-module "dp_gov" {
+module "data_gov" {
   source = "../../../modules/foundation/project-factory"
 
-  project_id      = local.dp_gov_project_id
+  project_id      = local.data_gov_project_id
+  project_name    = trimsuffix(substr("${local.project_prefix} Data Governance", 0, 30), " ")
   folder_id       = google_folder.storage.name
   billing_account = var.billing_account
   deletion_policy = var.project_deletion_policy
@@ -59,10 +60,11 @@ module "dp_gov" {
   ]
 }
 
-module "dp_st_core" {
+module "data_core" {
   source = "../../../modules/foundation/project-factory"
 
-  project_id      = local.dp_st_core_project_id
+  project_id      = local.data_core_project_id
+  project_name    = trimsuffix(substr("${local.project_prefix} Data Core Storage", 0, 30), " ")
   folder_id       = google_folder.storage.name
   billing_account = var.billing_account
   deletion_policy = var.project_deletion_policy
@@ -75,11 +77,12 @@ module "dp_st_core" {
   ]
 }
 
-module "dp_st_domain" {
+module "data_domain" {
   for_each = var.domain_marts
   source   = "../../../modules/foundation/project-factory"
 
-  project_id      = "${local.project_prefix}-dp-st-${each.key}"
+  project_id      = "${local.project_prefix}-data-${each.key}"
+  project_name    = trimsuffix(substr("${local.project_prefix} Data Mart ${each.key}", 0, 30), " ")
   folder_id       = google_folder.storage.name
   billing_account = var.billing_account
   deletion_policy = var.project_deletion_policy
@@ -91,10 +94,11 @@ module "dp_st_domain" {
   ]
 }
 
-module "dp_cp_etl" {
+module "data_etl" {
   source = "../../../modules/foundation/project-factory"
 
-  project_id      = local.dp_cp_etl_project_id
+  project_id      = local.data_etl_project_id
+  project_name    = trimsuffix(substr("${local.project_prefix} Data ETL Compute", 0, 30), " ")
   folder_id       = google_folder.compute.name
   billing_account = var.billing_account
   deletion_policy = var.project_deletion_policy
@@ -110,10 +114,11 @@ module "dp_cp_etl" {
   ]
 }
 
-module "dp_cp_bi" {
+module "data_bi" {
   source = "../../../modules/foundation/project-factory"
 
-  project_id      = local.dp_cp_bi_project_id
+  project_id      = local.data_bi_project_id
+  project_name    = trimsuffix(substr("${local.project_prefix} Data BI Compute", 0, 30), " ")
   folder_id       = google_folder.compute.name
   billing_account = var.billing_account
   deletion_policy = var.project_deletion_policy
@@ -127,15 +132,15 @@ module "dp_cp_bi" {
 resource "time_sleep" "gov_api_propagation" {
   create_duration = var.propagation_wait_seconds
 
-  depends_on = [module.dp_gov]
+  depends_on = [module.data_gov]
 }
 
 resource "time_sleep" "storage_api_propagation" {
   create_duration = var.propagation_wait_seconds
 
   depends_on = [
-    module.dp_st_core,
-    module.dp_st_domain,
+    module.data_core,
+    module.data_domain,
   ]
 }
 
@@ -143,43 +148,43 @@ resource "time_sleep" "compute_api_propagation" {
   create_duration = var.propagation_wait_seconds
 
   depends_on = [
-    module.dp_cp_etl,
-    module.dp_cp_bi,
+    module.data_etl,
+    module.data_bi,
   ]
 }
 
 data "google_storage_project_service_account" "core" {
   count = local.use_cmek ? 1 : 0
 
-  project    = module.dp_st_core.project_id
+  project    = module.data_core.project_id
   depends_on = [time_sleep.storage_api_propagation]
 }
 
 data "google_bigquery_default_service_account" "core" {
   count = local.use_cmek ? 1 : 0
 
-  project    = module.dp_st_core.project_id
+  project    = module.data_core.project_id
   depends_on = [time_sleep.storage_api_propagation]
 }
 
 data "google_bigquery_default_service_account" "domain" {
   for_each = local.use_cmek ? var.domain_marts : toset([])
 
-  project    = module.dp_st_domain[each.key].project_id
+  project    = module.data_domain[each.key].project_id
   depends_on = [time_sleep.storage_api_propagation]
 }
 
 data "google_bigquery_default_service_account" "etl" {
   count = local.use_cmek ? 1 : 0
 
-  project    = module.dp_cp_etl.project_id
+  project    = module.data_etl.project_id
   depends_on = [time_sleep.compute_api_propagation]
 }
 
 data "google_bigquery_default_service_account" "bi" {
   count = local.use_cmek ? 1 : 0
 
-  project    = module.dp_cp_bi.project_id
+  project    = module.data_bi.project_id
   depends_on = [time_sleep.compute_api_propagation]
 }
 
@@ -240,7 +245,7 @@ resource "time_sleep" "cmek_iam_propagation" {
 module "governance_catalog" {
   source = "../../../modules/data/governance-catalog"
 
-  project_id           = module.dp_gov.project_id
+  project_id           = module.data_gov.project_id
   region               = var.region
   prefix               = var.prefix
   masking_expression   = var.masking_expression
@@ -254,8 +259,8 @@ module "governance_catalog" {
 }
 
 resource "google_storage_bucket" "landing" {
-  project                     = module.dp_st_core.project_id
-  name                        = "${module.dp_st_core.project_id}-landing"
+  project                     = module.data_core.project_id
+  name                        = "${module.data_core.project_id}-landing"
   location                    = var.region
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
@@ -292,7 +297,7 @@ module "core_datasets" {
   for_each = local.core_datasets
   source   = "../../../modules/data/bigquery-dataset"
 
-  project_id                 = module.dp_st_core.project_id
+  project_id                 = module.data_core.project_id
   dataset_id                 = each.value
   region                     = var.region
   description                = "Enterprise core storage dataset (${each.key})."
@@ -311,7 +316,7 @@ module "domain_gold_mart" {
   for_each = var.domain_marts
   source   = "../../../modules/data/bigquery-dataset"
 
-  project_id                 = module.dp_st_domain[each.key].project_id
+  project_id                 = module.data_domain[each.key].project_id
   dataset_id                 = "${local.dataset_prefix}_gold_mart"
   region                     = var.region
   description                = "Enterprise Gold mart dataset for domain ${each.key}."
@@ -330,7 +335,7 @@ module "reservations" {
   count  = var.enable_reservations ? 1 : 0
   source = "../../../modules/data/bigquery-reservations"
 
-  project_id = module.dp_cp_etl.project_id
+  project_id = module.data_etl.project_id
   region     = var.region
   prefix     = var.prefix
   labels     = var.labels
@@ -357,8 +362,8 @@ module "reservations" {
   }
 
   assignments = {
-    (local.dp_cp_etl_project_id) = "etl"
-    (local.dp_cp_bi_project_id)  = "bi"
+    (local.data_etl_project_id) = "etl"
+    (local.data_bi_project_id)  = "bi"
   }
 
   depends_on = [time_sleep.compute_api_propagation]
@@ -367,7 +372,7 @@ module "reservations" {
 resource "google_project_iam_member" "bi_analysts_job_user" {
   for_each = toset(var.bi_analysts)
 
-  project = module.dp_cp_bi.project_id
+  project = module.data_bi.project_id
   role    = "roles/bigquery.jobUser"
   member  = each.value
 

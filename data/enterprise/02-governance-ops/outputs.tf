@@ -1,6 +1,6 @@
 output "dataform_repository_name" {
   value       = module.dataform_repository.repository_name
-  description = "Dataform repository short name in dp-cp-etl."
+  description = "Dataform repository short name in data-etl."
 }
 
 output "dataform_release_config_name" {
@@ -15,7 +15,7 @@ output "dataform_service_account_email" {
 
 output "dataform_service_agent_email" {
   value       = google_project_service_identity.dataform_agent.email
-  description = "Google-managed Dataform service agent email in dp-cp-etl."
+  description = "Google-managed Dataform service agent email in data-etl."
 }
 
 output "dataplex_service_agent_email" {
@@ -30,7 +30,7 @@ output "dataplex_scan_names" {
 
 output "ops_telemetry_dataset_id" {
   value       = google_bigquery_dataset.ops_telemetry.dataset_id
-  description = "Operational telemetry BigQuery dataset ID in dp-cp-etl."
+  description = "Operational telemetry BigQuery dataset ID in data-etl."
 }
 
 output "ops_view_id" {

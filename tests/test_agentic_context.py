@@ -59,17 +59,40 @@ class AgenticContextAndToolingTest(unittest.TestCase):
         max_suffix = 8
         project_prefix_len = max_prefix + 1 + max_suffix
         suffixes = (
-            "-fnd-audit",
-            "-fnd-netsec",
-            "-dp-gov",
-            "-dp-st-core",
-            "-dp-st-123456",
-            "-dp-cp-etl",
-            "-dp-cp-bi",
+            "-audit",
+            "-network",
+            "-data-gov",
+            "-data-core",
+            "-data-123456",
+            "-data-etl",
+            "-data-bi",
         )
         for suffix in suffixes:
             with self.subTest(suffix=suffix):
                 self.assertLessEqual(project_prefix_len + len(suffix), 30)
+
+    def test_no_stale_abbreviated_project_suffixes(self) -> None:
+        stale_tokens = (
+            "fnd-" + "audit",
+            "fnd_" + "audit",
+            "fnd-" + "netsec",
+            "fnd_" + "netsec",
+            "dp-" + "gov",
+            "dp_" + "gov",
+            "dp-" + "st-",
+            "dp_" + "st_",
+            "dp-" + "cp-",
+            "dp_" + "cp_",
+        )
+        skip_dirs = {".git", ".terraform", "__pycache__", ".pytest_cache"}
+        for path in sorted(REPO_ROOT.rglob("*")):
+            if not path.is_file() or any(part in skip_dirs for part in path.parts):
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore").lower()
+            rel = str(path.relative_to(REPO_ROOT))
+            with self.subTest(file=rel):
+                for tok in stale_tokens:
+                    self.assertNotIn(tok, text, f"Stale suffix '{tok}' in {rel}")
 
     def test_skills_have_valid_frontmatter(self) -> None:
         fm_re = re.compile(

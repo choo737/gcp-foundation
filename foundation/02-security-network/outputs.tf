@@ -1,5 +1,5 @@
-output "netsec_project_id" {
-  value       = module.netsec_project.project_id
+output "network_project_id" {
+  value       = module.network_project.project_id
   description = "Network and security foundation project ID."
 }
 

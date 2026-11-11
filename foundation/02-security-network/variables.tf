@@ -81,7 +81,7 @@ variable "enforce_vpc_sc" {
 variable "propagation_wait_seconds" {
   type        = string
   default     = "30s"
-  description = "Wait duration after API activation on the netsec project."
+  description = "Wait duration after API activation on the network security project."
 }
 
 variable "access_policy_id" {

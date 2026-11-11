@@ -10,11 +10,11 @@ This stage deploys separated governance, storage, and compute projects under `da
 ## Resources Deployed
 
 - `storage` and `compute` subfolders inside `data_folder_id`.
-- Five projects: `dp-gov`, `dp-st-core`, `dp-st-<domain>`, `dp-cp-etl`, and `dp-cp-bi`.
+- Five projects: `data-gov`, `data-core`, `data-<domain>`, `data-etl`, and `data-bi`.
 - Governance taxonomy, policy tags, `LAST_FOUR_CHARACTERS` masking policy, and Dataplex glossary.
 - Versioned landing GCS bucket and Medallion BigQuery datasets with optional CMEK encryption.
 - BigQuery Enterprise autoscaling slot reservations (`etl`, `bi`, `adhoc`).
-- BI analysts granted `jobUser` on `dp-cp-bi` and Gold `dataViewer` only.
+- BI analysts granted `jobUser` on `data-bi` and Gold `dataViewer` only.
 
 ## Usage
 

@@ -8,28 +8,28 @@ This repository separates cloud foundation guardrails from data platform operati
 organizations/<org_id> (or folders/<parent_id>)
 └── <prefix>-gcp-foundation
     ├── 01-shared-infrastructure
-    │   ├── <prefix>-fnd-audit
-    │   └── <prefix>-fnd-netsec
+    │   ├── <prefix>-audit
+    │   └── <prefix>-network
     └── 02-workloads
         └── data-platform
             ├── storage
-            │   ├── <prefix>-dp-gov
-            │   ├── <prefix>-dp-st-core
-            │   └── <prefix>-dp-st-<domain>
+            │   ├── <prefix>-data-gov
+            │   ├── <prefix>-data-core
+            │   └── <prefix>-data-<domain>
             └── compute
-                ├── <prefix>-dp-cp-etl
-                └── <prefix>-dp-cp-bi
+                ├── <prefix>-data-etl
+                └── <prefix>-data-bi
 ```
 
 ## Five-Project Data Separation
 
 | Project | Layer | Responsibility |
 | --- | --- | --- |
-| `dp-gov` | Governance | Data Catalog taxonomy, policy tags, `LAST_FOUR_CHARACTERS` masking, Dataplex glossary |
-| `dp-st-core` | Storage | Versioned landing bucket, `bronze_raw`, `silver_curated`, `silver_assertions` |
-| `dp-st-<domain>` | Storage | Domain-scoped `gold_mart` datasets such as `fin` |
-| `dp-cp-etl` | Compute | Dataform repository, ETL SA, `ops_telemetry`, BigQuery slot reservations |
-| `dp-cp-bi` | Compute | Zero-table BI query project isolating analyst compute and billing |
+| `data-gov` | Governance | Data Catalog taxonomy, policy tags, `LAST_FOUR_CHARACTERS` masking, Dataplex glossary |
+| `data-core` | Storage | Versioned landing bucket, `bronze_raw`, `silver_curated`, `silver_assertions` |
+| `data-<domain>` | Storage | Domain-scoped `gold_mart` datasets such as `fin` |
+| `data-etl` | Compute | Dataform repository, ETL SA, `ops_telemetry`, BigQuery slot reservations |
+| `data-bi` | Compute | Zero-table BI query project isolating analyst compute and billing |
 
 ## Design Rules
 

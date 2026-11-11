@@ -9,50 +9,50 @@ output "compute_folder_id" {
 }
 
 output "governance_project_id" {
-  value       = module.dp_gov.project_id
+  value       = module.data_gov.project_id
   description = "Data governance project ID."
 }
 
 output "core_storage_project_id" {
-  value       = module.dp_st_core.project_id
+  value       = module.data_core.project_id
   description = "Core Bronze and Silver storage project ID."
 }
 
 output "domain_storage_project_ids" {
-  value       = { for k, m in module.dp_st_domain : k => m.project_id }
+  value       = { for k, m in module.data_domain : k => m.project_id }
   description = "Map of domain codes to Gold mart storage project IDs."
 }
 
 output "domain_storage_project_numbers" {
-  value       = { for k, m in module.dp_st_domain : k => m.project_number }
+  value       = { for k, m in module.data_domain : k => m.project_number }
   description = "Map of domain codes to Gold mart storage project numbers."
 }
 
 output "data_platform_project_numbers" {
   value = concat(
     [
-      module.dp_gov.project_number,
-      module.dp_st_core.project_number,
-      module.dp_cp_etl.project_number,
-      module.dp_cp_bi.project_number,
+      module.data_gov.project_number,
+      module.data_core.project_number,
+      module.data_etl.project_number,
+      module.data_bi.project_number,
     ],
-    [for k in sort(keys(module.dp_st_domain)) : module.dp_st_domain[k].project_number],
+    [for k in sort(keys(module.data_domain)) : module.data_domain[k].project_number],
   )
   description = "List of numeric project numbers across all data platform projects."
 }
 
 output "primary_gold_project_id" {
-  value       = module.dp_st_domain[var.primary_domain].project_id
+  value       = module.data_domain[var.primary_domain].project_id
   description = "Primary domain Gold mart storage project ID."
 }
 
 output "etl_compute_project_id" {
-  value       = module.dp_cp_etl.project_id
+  value       = module.data_etl.project_id
   description = "ETL compute project ID hosting Dataform and reservations."
 }
 
 output "bi_compute_project_id" {
-  value       = module.dp_cp_bi.project_id
+  value       = module.data_bi.project_id
   description = "BI query compute project ID."
 }
 

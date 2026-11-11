@@ -14,7 +14,7 @@ This module provisions regional CMEK keys and optional VPC, PSC, DNS, and VPC-SC
 module "network_security" {
   source = "../../modules/foundation/network-security"
 
-  project_id  = module.netsec_project.project_id
+  project_id  = module.network_project.project_id
   region      = var.region
   prefix      = "ent"
   enable_cmek = true

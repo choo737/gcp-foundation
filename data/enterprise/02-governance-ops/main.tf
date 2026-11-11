@@ -422,7 +422,7 @@ resource "google_bigquery_dataset" "ops_telemetry" {
   project                    = var.etl_compute_project_id
   dataset_id                 = "${local.dataset_prefix}_ops_telemetry"
   friendly_name              = "${var.prefix} Ops Telemetry"
-  description                = "Operational BigQuery job cost and slot telemetry dataset in dp-cp-etl."
+  description                = "Operational BigQuery job cost and slot telemetry dataset in data-etl."
   location                   = var.region
   delete_contents_on_destroy = var.delete_contents_on_destroy
   labels                     = var.labels

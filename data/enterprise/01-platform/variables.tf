@@ -110,7 +110,7 @@ variable "fine_grained_readers" {
 variable "bi_analysts" {
   type        = list(string)
   default     = []
-  description = "BI analyst principals granted Gold viewer access, jobUser on dp-cp-bi, and masked reads."
+  description = "BI analyst principals granted Gold viewer access, jobUser on data-bi, and masked reads."
 }
 
 variable "labels" {

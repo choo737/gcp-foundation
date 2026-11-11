@@ -18,5 +18,5 @@ This guide maps common Cloudera Data Platform components to the Google Cloud res
 ## Why Compute and Storage Projects Separate
 
 - In Cloudera, YARN queues isolate ETL jobs from BI dashboards on shared hardware.
-- In BigQuery, separate `dp-cp-etl` and `dp-cp-bi` compute projects isolate quotas and slot reservations.
-- Data stays inside `dp-st-core` and `dp-st-<domain>`, so multiple compute projects query without copying tables.
+- In BigQuery, separate `data-etl` and `data-bi` compute projects isolate quotas and slot reservations.
+- Data stays inside `data-core` and `data-<domain>`, so multiple compute projects query without copying tables.

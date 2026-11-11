@@ -1,6 +1,6 @@
 locals {
   project_prefix   = var.project_suffix != "" ? "${var.prefix}-${var.project_suffix}" : var.prefix
-  audit_project_id = "${local.project_prefix}-fnd-audit"
+  audit_project_id = "${local.project_prefix}-audit"
 }
 
 provider "google" {
@@ -30,6 +30,7 @@ module "audit_project" {
   source = "../../modules/foundation/project-factory"
 
   project_id      = local.audit_project_id
+  project_name    = trimsuffix(substr("${local.project_prefix} Audit FinOps", 0, 30), " ")
   folder_id       = module.folder_hierarchy.shared_infra_folder_id
   billing_account = var.billing_account
   deletion_policy = var.project_deletion_policy

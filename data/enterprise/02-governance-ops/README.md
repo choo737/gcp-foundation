@@ -4,10 +4,10 @@ This stage seeds Bronze tables, creates the Dataform repo, and configures Datapl
 
 ## Resources Deployed
 
-- Seeded `pos_orders_cdc` and `crm_customers_cdc` tables in `dp-st-core` with `pii_restricted` tags.
-- Seeded `masked_customers_canary` table in `dp-st-<primary_domain>` with `pii_masked` tags.
-- Dedicated `ops_telemetry` dataset and `ops_job_cost_monitor` view inside `dp-cp-etl`.
-- Cross-project Dataform repository and least-privilege IAM grants inside `dp-cp-etl`.
+- Seeded `pos_orders_cdc` and `crm_customers_cdc` tables in `data-core` with `pii_restricted` tags.
+- Seeded `masked_customers_canary` table in `data-<primary_domain>` with `pii_masked` tags.
+- Dedicated `ops_telemetry` dataset and `ops_job_cost_monitor` view inside `data-etl`.
+- Cross-project Dataform repository and least-privilege IAM grants inside `data-etl`.
 - On-demand Dataplex profile scan on `masked_customers_canary`.
 
 ## Usage

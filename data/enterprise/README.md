@@ -5,7 +5,7 @@ These two stages deploy an enterprise multi-project Medallion data platform insi
 ## Stage Order
 
 1. `01-platform/`: Creates `storage` and `compute` subfolders, five projects, datasets, KMS grants, and reservations.
-2. `02-governance-ops/`: Seeds Bronze tables, links Dataform in `dp-cp-etl`, grants IAM, and adds Dataplex scans.
+2. `02-governance-ops/`: Seeds Bronze tables, links Dataform in `data-etl`, grants IAM, and adds Dataplex scans.
 
 ## Linking Upstream Stages
 

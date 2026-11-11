@@ -4,7 +4,7 @@ This stage deploys the central KMS key ring, crypto key, and optional VPC contro
 
 ## Resources Deployed
 
-- `${prefix}-fnd-netsec` project inside `01-shared-infrastructure`.
+- `${prefix}-network` project inside `01-shared-infrastructure`.
 - Regional Cloud KMS key ring and CMEK key with 90-day rotation.
 - Optional custom VPC, Private Service Connect, and dry-run VPC-SC perimeter.
 

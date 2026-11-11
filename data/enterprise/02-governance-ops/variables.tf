@@ -52,18 +52,18 @@ variable "domain_gold_dataset_ids" {
 
 variable "pii_masked_policy_tag_id" {
   type        = string
-  description = "Masked PII policy tag resource name from dp-gov."
+  description = "Masked PII policy tag resource name from data-gov."
 }
 
 variable "pii_restricted_policy_tag_id" {
   type        = string
-  description = "Restricted PII policy tag resource name from dp-gov."
+  description = "Restricted PII policy tag resource name from data-gov."
 }
 
 variable "pii_data_policy_short_id" {
   type        = string
   default     = ""
-  description = "Short data_policy_id of the BigQuery PII masking policy from dp-gov."
+  description = "Short data_policy_id of the BigQuery PII masking policy from data-gov."
 }
 
 variable "kms_key_id" {

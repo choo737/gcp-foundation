@@ -15,7 +15,8 @@ This module creates a GCP project without a default VPC network, enables APIs, a
 module "audit_project" {
   source = "../../modules/foundation/project-factory"
 
-  project_id      = "ent-fnd-audit"
+  project_id      = "ent-audit"
+  project_name    = "ent Audit FinOps"
   folder_id       = var.shared_infra_folder_id
   billing_account = var.billing_account
   activate_apis   = ["logging.googleapis.com"]
