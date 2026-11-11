@@ -1,0 +1,12 @@
+parent_id                  = "organizations/000000000000"
+billing_account            = "000000-000000-000000"
+prefix                     = "ent"
+project_suffix             = "dev01"
+region                     = "asia-southeast1"
+deletion_protection        = true
+project_deletion_policy    = "PREVENT"
+delete_contents_on_destroy = false
+enable_org_policies        = false
+enable_billing_budget      = true
+monthly_budget_amount      = 500
+budget_currency_code       = "USD"

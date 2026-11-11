@@ -1,0 +1,24 @@
+# Terraform directories and state files
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.*
+crash.log
+crash.*.log
+
+# Local and linked variable overrides
+terraform.tfvars
+custom.auto.tfvars
+*.auto.tfvars
+*.auto.tfvars.json
+00_linked.auto.tfvars.json
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# OS artifacts
+.DS_Store

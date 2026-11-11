@@ -1,0 +1,13 @@
+data_folder_id             = "folders/000000000000"
+billing_account            = "000000-000000-000000"
+prefix                     = "ent"
+project_suffix             = "dev01"
+region                     = "asia-southeast1"
+kms_key_id                 = ""
+domain_marts               = ["fin"]
+deletion_protection        = true
+project_deletion_policy    = "PREVENT"
+delete_contents_on_destroy = false
+enable_reservations        = true
+masked_readers             = ["user:analyst@example.com"]
+bi_analysts                = ["user:bi-viewer@example.com"]

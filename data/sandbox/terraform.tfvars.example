@@ -1,0 +1,6 @@
+project_id                 = "your-sandbox-project-id"
+region                     = "asia-southeast1"
+prefix                     = "bqfnd"
+medallion_git_url          = "https://github.com/choo737/gcp-data-medallion.git"
+masked_readers             = ["user:analyst@example.com"]
+delete_contents_on_destroy = false

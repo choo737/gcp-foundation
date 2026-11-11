@@ -1,0 +1,94 @@
+locals {
+  project_prefix   = var.project_suffix != "" ? "${var.prefix}-${var.project_suffix}" : var.prefix
+  audit_project_id = "${local.project_prefix}-fnd-audit"
+}
+
+provider "google" {
+  region = var.region
+}
+
+provider "google" {
+  alias                 = "billing_quota"
+  project               = local.audit_project_id
+  billing_project       = local.audit_project_id
+  user_project_override = true
+  region                = var.region
+}
+
+module "folder_hierarchy" {
+  source = "../../modules/foundation/folder-hierarchy"
+
+  parent_id           = var.parent_id
+  prefix              = var.prefix
+  folder_suffix       = var.project_suffix
+  create_root_folder  = true
+  deletion_protection = var.deletion_protection
+  workload_folders    = ["data-platform"]
+}
+
+module "audit_project" {
+  source = "../../modules/foundation/project-factory"
+
+  project_id      = local.audit_project_id
+  folder_id       = module.folder_hierarchy.shared_infra_folder_id
+  billing_account = var.billing_account
+  deletion_policy = var.project_deletion_policy
+  labels          = var.labels
+
+  activate_apis = [
+    "logging.googleapis.com",
+    "orgpolicy.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
+    "billingbudgets.googleapis.com",
+    "pubsub.googleapis.com",
+    "bigquery.googleapis.com",
+  ]
+}
+
+resource "time_sleep" "audit_api_propagation" {
+  create_duration = var.propagation_wait_seconds
+
+  depends_on = [module.audit_project]
+}
+
+module "logging_guardrails" {
+  source = "../../modules/foundation/logging-guardrails"
+
+  providers = {
+    google = google.billing_quota
+  }
+
+  audit_project_id              = module.audit_project.project_id
+  folder_id                     = module.folder_hierarchy.root_folder_id
+  prefix                        = var.prefix
+  region                        = var.region
+  retention_days                = var.retention_days
+  lock_audit_bucket             = var.lock_audit_bucket
+  enable_folder_sink            = true
+  enable_data_access_audit_logs = var.enable_data_access_audit_logs
+  enable_org_policies           = var.enable_org_policies
+  allowed_resource_locations    = ["in:${var.region}-locations"]
+
+  depends_on = [time_sleep.audit_api_propagation]
+}
+
+module "finops_governance" {
+  source = "../../modules/foundation/finops-governance"
+
+  providers = {
+    google = google.billing_quota
+  }
+
+  audit_project_id           = module.audit_project.project_id
+  billing_account            = var.billing_account
+  prefix                     = var.prefix
+  region                     = var.region
+  enable_billing_budget      = var.enable_billing_budget
+  budget_project_numbers     = var.budget_project_numbers
+  monthly_budget_amount      = var.monthly_budget_amount
+  budget_currency_code       = var.budget_currency_code
+  delete_contents_on_destroy = var.delete_contents_on_destroy
+  labels                     = var.labels
+
+  depends_on = [time_sleep.audit_api_propagation]
+}

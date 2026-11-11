@@ -1,0 +1,16 @@
+governance_project_id        = "ent-dp-gov"
+core_storage_project_id      = "ent-dp-st-core"
+primary_gold_project_id      = "ent-dp-st-fin"
+etl_compute_project_id       = "ent-dp-cp-etl"
+bronze_dataset_id            = "ent_bronze_raw"
+silver_dataset_id            = "ent_silver_curated"
+assertions_dataset_id        = "ent_silver_assertions"
+primary_gold_dataset_id      = "ent_gold_mart"
+pii_masked_policy_tag_id     = "projects/ent-dp-gov/locations/asia-southeast1/taxonomies/0/policyTags/0"
+pii_restricted_policy_tag_id = "projects/ent-dp-gov/locations/asia-southeast1/taxonomies/0/policyTags/1"
+pii_data_policy_short_id     = "ent_pii_mask"
+region                       = "asia-southeast1"
+prefix                       = "ent"
+medallion_git_url            = "https://github.com/choo737/gcp-data-medallion.git"
+enable_scheduled_workflow    = true
+delete_contents_on_destroy   = false
