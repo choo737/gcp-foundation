@@ -153,6 +153,13 @@ resource "google_bigquery_datapolicy_data_policy_iam_member" "dataplex_masked_re
   member         = google_project_service_identity.dataplex_agent.member
 }
 
+resource "google_bigquery_dataset_iam_member" "dataplex_gold_viewer" {
+  project    = var.primary_gold_project_id
+  dataset_id = var.primary_gold_dataset_id
+  role       = "roles/bigquery.dataViewer"
+  member     = google_project_service_identity.dataplex_agent.member
+}
+
 data "google_bigquery_default_service_account" "etl" {
   count = local.use_cmek ? 1 : 0
 
@@ -464,6 +471,17 @@ resource "google_bigquery_table" "ops_job_cost_monitor" {
   }
 }
 
+resource "time_sleep" "dataplex_iam_propagation" {
+  create_duration = var.dataplex_iam_propagation_seconds
+
+  depends_on = [
+    time_sleep.iam_and_kms_propagation,
+    google_bigquery_datapolicy_data_policy_iam_member.dataplex_masked_reader,
+    google_bigquery_dataset_iam_member.dataplex_gold_viewer,
+    google_bigquery_table.masked_customers_canary,
+  ]
+}
+
 module "dataplex_scans" {
   source = "../../../modules/data/dataplex-scans"
 
@@ -482,5 +500,5 @@ module "dataplex_scans" {
     }
   }
 
-  depends_on = [time_sleep.iam_and_kms_propagation]
+  depends_on = [time_sleep.dataplex_iam_propagation]
 }

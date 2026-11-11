@@ -129,6 +129,17 @@ class AgenticContextAndToolingTest(unittest.TestCase):
             df_out,
         )
 
+    def test_dataplex_scans_wait_for_masked_reader_propagation(self) -> None:
+        for rel in (
+            "data/sandbox/main.tf",
+            "data/enterprise/02-governance-ops/main.tf",
+        ):
+            text = (REPO_ROOT / rel).read_text(encoding="utf-8")
+            with self.subTest(file=rel):
+                self.assertIn('resource "time_sleep" "dataplex_iam_propagation"', text)
+                self.assertIn("var.dataplex_iam_propagation_seconds", text)
+                self.assertIn("time_sleep.dataplex_iam_propagation", text)
+
     def test_skills_have_valid_frontmatter(self) -> None:
         fm_re = re.compile(
             r"\A---\nname:\s*([a-z0-9-]+)\ndescription:\s*(.+)\n---\n",

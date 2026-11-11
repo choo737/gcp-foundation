@@ -91,6 +91,12 @@ variable "propagation_wait_seconds" {
   description = "Wait duration after API activation before creating dependent resources."
 }
 
+variable "dataplex_iam_propagation_seconds" {
+  type        = string
+  default     = "90s"
+  description = "Wait duration after Dataplex maskedReader IAM binding before creating data scans."
+}
+
 variable "labels" {
   type = map(string)
   default = {

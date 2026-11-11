@@ -88,7 +88,8 @@ Decide how Dataform should run before writing `custom.auto.tfvars`:
 - **Git-synced mode**: Set `git_token_secret_version` to a Secret Manager version so Dataform compiles `choo737/gcp-data-medallion`.
 - Never place Git tokens in `.tfvars` or Terraform state.
 
-To create a Secret Manager PAT via stdin without touching Terraform state:
+Create a Secret Manager PAT via stdin without touching Terraform state.
+Use `printf '%s'` to strip trailing newlines; never pipe `gh auth token` directly:
 
 ```bash
 gcloud services enable secretmanager.googleapis.com --project="${TARGET_PROJECT}"
