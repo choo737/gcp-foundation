@@ -343,6 +343,12 @@ resource "google_bigquery_table" "pos_orders_cdc" {
       type        = "TIMESTAMP"
       mode        = "NULLABLE"
       description = "Last CDC update timestamp."
+    },
+    {
+      name        = "_metadata_deleted"
+      type        = "BOOL"
+      mode        = "NULLABLE"
+      description = "Optional CDC delete tombstone flag."
     }
   ])
 
@@ -401,6 +407,12 @@ resource "google_bigquery_table" "crm_customers_cdc" {
       type        = "TIMESTAMP"
       mode        = "NULLABLE"
       description = "Last CDC update timestamp."
+    },
+    {
+      name        = "_metadata_deleted"
+      type        = "BOOL"
+      mode        = "NULLABLE"
+      description = "Optional CDC delete tombstone flag."
     }
   ])
 

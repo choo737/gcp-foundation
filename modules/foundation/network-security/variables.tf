@@ -42,6 +42,29 @@ variable "subnet_cidr" {
   description = "Primary CIDR range for the optional subnetwork."
 }
 
+variable "enable_vpc_flow_logs" {
+  type        = bool
+  default     = true
+  description = "Whether to enable VPC Flow Logs on the private subnetwork."
+}
+
+variable "vpc_flow_logs_sampling" {
+  type        = number
+  default     = 0.5
+  description = "Sampling rate (0.0 to 1.0) for VPC Flow Logs on the private subnetwork."
+
+  validation {
+    condition     = var.vpc_flow_logs_sampling >= 0 && var.vpc_flow_logs_sampling <= 1
+    error_message = "vpc_flow_logs_sampling must be between 0.0 and 1.0."
+  }
+}
+
+variable "enable_dns_logging" {
+  type        = bool
+  default     = true
+  description = "Whether to enable Cloud DNS query logging on the custom VPC."
+}
+
 variable "enable_psc" {
   type        = bool
   default     = false

@@ -6,7 +6,9 @@ This stage deploys the central KMS key ring, crypto key, and optional VPC contro
 
 - `${prefix}-network` project inside `01-shared-infrastructure`.
 - Regional Cloud KMS key ring and CMEK key with 90-day rotation.
-- Optional custom VPC, Private Service Connect, and dry-run VPC-SC perimeter.
+- Optional custom VPC, subnet with Flow Logs, and Cloud DNS query logging.
+- Optional PSC endpoint with `googleapis.com.`, `pkg.dev.`, and `gcr.io.` private DNS zones.
+- Network firewall policy allowing PSC TCP 443 with default deny-all egress and dry-run VPC-SC.
 
 ## Usage
 

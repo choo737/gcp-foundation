@@ -78,6 +78,26 @@ output "log_sink_writer_identity" {
   description = "Writer service account identity of the folder audit sink."
 }
 
+output "log_bucket_id" {
+  value       = module.logging_guardrails.log_bucket_id
+  description = "Resource ID of the audit Cloud Logging bucket."
+}
+
+output "log_analytics_linked_dataset_id" {
+  value       = module.logging_guardrails.log_analytics_linked_dataset_id
+  description = "BigQuery linked dataset ID for Cloud Logging Log Analytics, or null."
+}
+
+output "siem_pubsub_topic_id" {
+  value       = module.logging_guardrails.siem_pubsub_topic_id
+  description = "Pub/Sub topic ID for optional SIEM log export, or null."
+}
+
+output "scc_pubsub_topic_id" {
+  value       = module.logging_guardrails.scc_pubsub_topic_id
+  description = "Pub/Sub topic ID for SCC v2 high and critical findings, or null."
+}
+
 output "enforced_org_policy_names" {
   value       = module.logging_guardrails.enforced_org_policy_names
   description = "Sorted resource names of enforced folder Org Policies."

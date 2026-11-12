@@ -1,4 +1,5 @@
 ROOTS := \
+	foundation/00-bootstrap \
 	foundation/01-org-governance \
 	foundation/02-security-network \
 	data/sandbox \

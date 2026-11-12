@@ -1,11 +1,12 @@
 # Foundation Stages
 
-These stages build the shared organization folder tree, audit logging, and KMS security controls.
+These stages build bootstrap state, organization folders, audit logging, and network security controls.
 
 ## Stage Order
 
-1. `01-org-governance/`: Creates root, shared infrastructure, and workload folders plus the audit project.
-2. `02-security-network/`: Creates the netsec project, regional KMS key, and optional VPC or VPC-SC.
+1. `00-bootstrap/`: Optional Day-0 `tfstate` and `iac-outputs` buckets plus GitHub Actions WIF on a seed project.
+2. `01-org-governance/`: Creates root, shared infrastructure, and workload folders plus the audit project.
+3. `02-security-network/`: Creates the netsec project, regional KMS key, and hardened VPC or VPC-SC.
 
 ## Stage Linking
 

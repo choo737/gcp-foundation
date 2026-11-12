@@ -10,5 +10,5 @@ Follow [AGENTS.md](AGENTS.md) and [.agents/skills/setup-customer-foundation/SKIL
 - Keep `modules/foundation/` and `modules/data/` at 5 files per module.
 - Keep `foundation/`, `data/sandbox/`, and `data/enterprise/` at 6 files per runnable root.
 - Pin `required_version = ">= 1.8.0"` and `hashicorp/google` `>= 8.0.0, < 9.0.0`.
-- Chain upstream stage outputs with `scripts/link-stages.sh` into `00_linked.auto.tfvars.json`.
+- Chain upstream stage outputs with `scripts/link-stages.sh` into `00_linked.auto.tfvars.json` locally or via GCS.
 - Validate every edit with `make fmt-check`, `make validate`, and `make test`.

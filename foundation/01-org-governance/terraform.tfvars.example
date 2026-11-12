@@ -1,14 +1,20 @@
-parent_id                  = "organizations/000000000000"
-billing_account            = "000000-000000-000000"
-prefix                     = "ent"
-project_suffix             = "dev01"
-region                     = "asia-southeast1"
-deletion_protection        = true
-project_deletion_policy    = "PREVENT"
-delete_contents_on_destroy = false
+parent_id                     = "organizations/000000000000"
+billing_account               = "000000-000000-000000"
+prefix                        = "ent"
+project_suffix                = "dev01"
+region                        = "asia-southeast1"
+deletion_protection           = true
+project_deletion_policy       = "PREVENT"
+delete_contents_on_destroy    = false
+enable_log_analytics          = true
+enable_log_analytics_link     = true
+enable_siem_pubsub_sink       = false
+enable_scc_notifications      = false
 enable_org_policies           = false
 allowed_policy_member_domains = [] # Example: ["C00000000"]
 allowed_contact_domains       = [] # Example: ["@example.com"]
+essential_contacts            = {} # Example: { security = { email = "secops@example.com", categories = ["SECURITY"] } }
+foundation_iam_groups         = {} # Example: { audit_viewer = "grp-gcp-audit-viewer@example.com" }
 enable_billing_budget         = true
-monthly_budget_amount      = 500
-budget_currency_code       = "USD"
+monthly_budget_amount         = 500
+budget_currency_code          = "USD"

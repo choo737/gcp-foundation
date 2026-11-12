@@ -1,0 +1,8 @@
+project_id          = "seed-admin-project-id"
+region              = "asia-southeast1"
+prefix              = "ent"
+project_suffix      = "dev01"
+enable_github_wif   = false
+github_org          = "" # Example: "acme-corp"
+github_repositories = [] # Example: ["acme-corp/gcp-foundation", "acme-corp/gcp-data-ingestion"]
+force_destroy       = false

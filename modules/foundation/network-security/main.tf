@@ -14,6 +14,17 @@ locals {
     "logging.googleapis.com",
     "pubsub.googleapis.com",
   ]
+
+  psc_artifact_dns_zones = var.enable_vpc && var.enable_psc ? {
+    pkg_dev = {
+      zone_name = "${var.prefix}-pkg-dev-zone"
+      dns_name  = "pkg.dev."
+    }
+    gcr_io = {
+      zone_name = "${var.prefix}-gcr-io-zone"
+      dns_name  = "gcr.io."
+    }
+  } : {}
 }
 
 resource "google_kms_key_ring" "this" {
@@ -58,6 +69,28 @@ resource "google_compute_subnetwork" "this" {
   network                  = google_compute_network.this[0].id
   ip_cidr_range            = var.subnet_cidr
   private_ip_google_access = true
+
+  dynamic "log_config" {
+    for_each = var.enable_vpc_flow_logs ? [1] : []
+    content {
+      aggregation_interval = "INTERVAL_5_SEC"
+      flow_sampling        = var.vpc_flow_logs_sampling
+      metadata             = "INCLUDE_ALL_METADATA"
+    }
+  }
+}
+
+resource "google_dns_policy" "logging" {
+  count = var.enable_vpc && var.enable_dns_logging ? 1 : 0
+
+  project        = var.project_id
+  name           = "${var.prefix}-dns-logging"
+  enable_logging = true
+  description    = "Enable Cloud DNS query logging for the private VPC."
+
+  networks {
+    network_url = google_compute_network.this[0].id
+  }
 }
 
 resource "google_compute_global_address" "psc" {
@@ -123,19 +156,102 @@ resource "google_dns_record_set" "googleapis_cname" {
   rrdatas      = ["googleapis.com."]
 }
 
-resource "google_compute_firewall" "psc_egress" {
+resource "google_dns_managed_zone" "psc_artifact" {
+  for_each = local.psc_artifact_dns_zones
+
+  project     = var.project_id
+  name        = each.value.zone_name
+  dns_name    = each.value.dns_name
+  description = "Private DNS zone routing ${each.value.dns_name} to the Private Service Connect endpoint."
+  visibility  = "private"
+  labels      = var.labels
+
+  private_visibility_config {
+    networks {
+      network_url = google_compute_network.this[0].id
+    }
+  }
+}
+
+resource "google_dns_record_set" "psc_artifact_a" {
+  for_each = local.psc_artifact_dns_zones
+
+  project      = var.project_id
+  managed_zone = google_dns_managed_zone.psc_artifact[each.key].name
+  name         = each.value.dns_name
+  type         = "A"
+  ttl          = 300
+  rrdatas      = [google_compute_global_address.psc[0].address]
+}
+
+resource "google_dns_record_set" "psc_artifact_cname" {
+  for_each = local.psc_artifact_dns_zones
+
+  project      = var.project_id
+  managed_zone = google_dns_managed_zone.psc_artifact[each.key].name
+  name         = "*.${each.value.dns_name}"
+  type         = "CNAME"
+  ttl          = 300
+  rrdatas      = [each.value.dns_name]
+}
+
+resource "google_compute_network_firewall_policy" "egress" {
   count = var.enable_vpc && var.enable_psc ? 1 : 0
 
-  project            = var.project_id
-  name               = "${var.prefix}-allow-psc-egress"
-  network            = google_compute_network.this[0].id
-  direction          = "EGRESS"
-  priority           = 1000
-  destination_ranges = ["${google_compute_global_address.psc[0].address}/32"]
+  project     = var.project_id
+  name        = "${var.prefix}-egress-policy"
+  description = "Network firewall policy enforcing private PSC egress and default deny-all."
+}
 
-  allow {
-    protocol = "tcp"
-    ports    = ["443"]
+resource "google_compute_network_firewall_policy_association" "egress" {
+  count = var.enable_vpc && var.enable_psc ? 1 : 0
+
+  project           = var.project_id
+  name              = "${var.prefix}-egress-policy-assoc"
+  attachment_target = google_compute_network.this[0].id
+  firewall_policy   = google_compute_network_firewall_policy.egress[0].name
+}
+
+resource "google_compute_network_firewall_policy_rule" "allow_psc_egress" {
+  count = var.enable_vpc && var.enable_psc ? 1 : 0
+
+  project         = var.project_id
+  firewall_policy = google_compute_network_firewall_policy.egress[0].name
+  rule_name       = "${var.prefix}-allow-psc-https"
+  description     = "Allow HTTPS egress only to the Private Service Connect endpoint."
+  direction       = "EGRESS"
+  priority        = 1000
+  action          = "allow"
+  enable_logging  = true
+
+  match {
+    dest_ip_ranges = ["${google_compute_global_address.psc[0].address}/32"]
+
+    layer4_configs {
+      ip_protocol = "tcp"
+      ports       = ["443"]
+    }
+  }
+}
+
+resource "google_compute_network_firewall_policy_rule" "deny_all_egress" {
+  count = var.enable_vpc && var.enable_psc ? 1 : 0
+
+  project         = var.project_id
+  firewall_policy = google_compute_network_firewall_policy.egress[0].name
+  rule_name       = "${var.prefix}-deny-all-egress"
+  description     = "Default deny-all egress rule."
+  direction       = "EGRESS"
+  priority        = 65530
+  action          = "deny"
+  enable_logging  = true
+
+  match {
+    dest_ip_ranges = ["0.0.0.0/0"]
+
+    layer4_configs {
+      ip_protocol = "all"
+    }
   }
 }
 

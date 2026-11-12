@@ -43,12 +43,14 @@ Confirm the command prints `true`.
 Never guess organization IDs, billing accounts, project IDs, or IAM principals.
 Ask the customer to select an adoption path first:
 
-1. **Path 1 (Greenfield End-to-End)**: `foundation/01-org-governance` -> `foundation/02-security-network` -> `data/enterprise/01-platform` -> `data/enterprise/02-governance-ops`.
-2. **Path 2 (Brownfield Data Platform)**: `data/enterprise/01-platform` -> `data/enterprise/02-governance-ops` under an existing folder.
-3. **Path 3 (Single-Project Sandbox)**: `data/sandbox/` inside one existing GCP project.
+1. **Path 0 (Optional Bootstrap)**: `foundation/00-bootstrap` for GCS `tfstate`, `iac-outputs`, and GitHub WIF.
+2. **Path 1 (Greenfield End-to-End)**: `foundation/01-org-governance` -> `foundation/02-security-network` -> `data/enterprise/01-platform` -> `data/enterprise/02-governance-ops`.
+3. **Path 2 (Brownfield Data Platform)**: `data/enterprise/01-platform` -> `data/enterprise/02-governance-ops` under an existing folder.
+4. **Path 3 (Single-Project Sandbox)**: `data/sandbox/` inside one existing GCP project.
 
 Collect the required variables before creating `custom.auto.tfvars`:
 
+- **Path 0**: `project_id`, `region`, `prefix`, `project_suffix`, `enable_github_wif`, `github_org`, `github_repositories`.
 - **Path 1**: `parent_id`, `billing_account`, `region`, `prefix`, `project_suffix`, `enable_org_policies`, `allowed_policy_member_domains`, `allowed_contact_domains`, `enable_billing_budget`, `monthly_budget_amount`, `budget_currency_code`, `enable_reservations`, `masked_readers`, `bi_analysts`.
 - **Path 2**: `data_folder_id`, `billing_account`, `region`, `prefix`, `project_suffix`, optional `kms_key_id`, `enable_reservations`, `masked_readers`, `bi_analysts`.
 - **Path 3**: `project_id`, `region`, `prefix`, `masked_readers`.
@@ -63,8 +65,9 @@ Ask whether this is a **production** or **ephemeral test** deployment:
 
 Map customer inputs to each stage's `custom.auto.tfvars`:
 
-- `foundation/01-org-governance/custom.auto.tfvars`: `parent_id`, `billing_account`, `region`, `prefix`, `project_suffix`, `enable_org_policies`, `allowed_policy_member_domains`, `allowed_contact_domains`, `enable_billing_budget`, `monthly_budget_amount`, `budget_currency_code`, lifecycle flags.
-- `foundation/02-security-network/custom.auto.tfvars`: optional `enable_cmek`, `enable_vpc`, `enable_psc`, `enable_vpc_sc`, `enforce_vpc_sc`, `project_deletion_policy`.
+- `foundation/00-bootstrap/custom.auto.tfvars`: `project_id`, `region`, `prefix`, `project_suffix`, `enable_github_wif`, `github_org`, `github_repositories`, `force_destroy`.
+- `foundation/01-org-governance/custom.auto.tfvars`: `parent_id`, `billing_account`, `region`, `prefix`, `project_suffix`, `enable_org_policies`, `allowed_policy_member_domains`, `allowed_contact_domains`, `enable_log_analytics`, `enable_siem_pubsub_sink`, `enable_scc_notifications`, `essential_contacts`, `foundation_iam_groups`, `enable_billing_budget`, `monthly_budget_amount`, `budget_currency_code`, lifecycle flags.
+- `foundation/02-security-network/custom.auto.tfvars`: optional `enable_cmek`, `enable_vpc`, `enable_vpc_flow_logs`, `enable_dns_logging`, `enable_psc`, `enable_vpc_sc`, `enforce_vpc_sc`, `project_deletion_policy`.
 - `data/enterprise/01-platform/custom.auto.tfvars`: `domain_marts`, `primary_domain`, `enable_reservations`, `masked_readers`, `bi_analysts` (plus `data_folder_id`, `billing_account`, `prefix`, `project_suffix` for Path 2).
 - `data/enterprise/02-governance-ops/custom.auto.tfvars`: `medallion_git_url`, `git_token_secret_version` (optional), `enable_scheduled_workflow`, `delete_contents_on_destroy`.
 - `data/sandbox/custom.auto.tfvars`: `project_id`, `region`, `prefix`, `git_token_secret_version` (optional), `masked_readers`, `delete_contents_on_destroy`.
@@ -130,6 +133,13 @@ terraform -chdir=data/enterprise/01-platform apply
 terraform -chdir=data/enterprise/02-governance-ops init
 terraform -chdir=data/enterprise/02-governance-ops plan
 terraform -chdir=data/enterprise/02-governance-ops apply
+```
+
+For cross-repo CI/CD handoffs, export non-sensitive outputs to the `iac-outputs` bucket without sharing `.tfstate`:
+
+```bash
+./scripts/link-stages.sh --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/01-platform.json" data/enterprise/01-platform
+./scripts/link-stages.sh --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/01-platform.json" /path/to/gcp-data-ingestion/stages/enterprise
 ```
 
 For teardown, use a two-step pass when originally deployed with protection flags enabled:

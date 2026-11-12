@@ -22,3 +22,7 @@ __pycache__/
 
 # OS artifacts
 .DS_Store
+
+# CodeMender metadata
+.cm_project
+.codemender/

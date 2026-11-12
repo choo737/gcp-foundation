@@ -1,3 +1,18 @@
+output "project_id" {
+  value       = var.project_id
+  description = "Sandbox GCP project ID."
+}
+
+output "region" {
+  value       = var.region
+  description = "Sandbox GCP region."
+}
+
+output "prefix" {
+  value       = var.prefix
+  description = "Sandbox naming prefix."
+}
+
 output "project_number" {
   value       = data.google_project.current.number
   description = "Numeric GCP project number for the sandbox project."
@@ -6,6 +21,16 @@ output "project_number" {
 output "dataset_ids" {
   value       = { for k, m in module.datasets : k => m.dataset_id }
   description = "Map of Medallion layer keys to created BigQuery dataset IDs."
+}
+
+output "bronze_dataset_id" {
+  value       = module.datasets["bronze_raw"].dataset_id
+  description = "Sandbox Bronze BigQuery dataset ID."
+}
+
+output "ops_telemetry_dataset_id" {
+  value       = module.datasets["ops_telemetry"].dataset_id
+  description = "Sandbox operational telemetry BigQuery dataset ID."
 }
 
 output "taxonomy_id" {

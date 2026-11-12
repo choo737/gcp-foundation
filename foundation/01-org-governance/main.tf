@@ -36,14 +36,18 @@ module "audit_project" {
   deletion_policy = var.project_deletion_policy
   labels          = var.labels
 
-  activate_apis = [
-    "logging.googleapis.com",
-    "orgpolicy.googleapis.com",
-    "cloudresourcemanager.googleapis.com",
-    "billingbudgets.googleapis.com",
-    "pubsub.googleapis.com",
-    "bigquery.googleapis.com",
-  ]
+  activate_apis = concat(
+    [
+      "logging.googleapis.com",
+      "orgpolicy.googleapis.com",
+      "cloudresourcemanager.googleapis.com",
+      "billingbudgets.googleapis.com",
+      "pubsub.googleapis.com",
+      "bigquery.googleapis.com",
+      "essentialcontacts.googleapis.com",
+    ],
+    var.enable_scc_notifications ? ["securitycenter.googleapis.com"] : [],
+  )
 }
 
 resource "time_sleep" "audit_api_propagation" {
@@ -59,21 +63,31 @@ module "logging_guardrails" {
     google = google.billing_quota
   }
 
-  audit_project_id                = module.audit_project.project_id
-  folder_id                       = module.folder_hierarchy.root_folder_id
-  prefix                          = var.prefix
-  region                          = var.region
-  retention_days                  = var.retention_days
-  lock_audit_bucket               = var.lock_audit_bucket
-  enable_folder_sink              = true
-  enable_data_access_audit_logs   = var.enable_data_access_audit_logs
-  enable_org_policies             = var.enable_org_policies
-  allowed_resource_locations      = ["in:${var.region}-locations"]
-  allowed_policy_member_domains   = var.allowed_policy_member_domains
-  allowed_contact_domains         = var.allowed_contact_domains
-  denied_storage_auth_types       = var.denied_storage_auth_types
-  allowed_cloud_run_ingress       = var.allowed_cloud_run_ingress
-  allowed_cloud_functions_ingress = var.allowed_cloud_functions_ingress
+  audit_project_id                  = module.audit_project.project_id
+  folder_id                         = module.folder_hierarchy.root_folder_id
+  billing_account                   = var.billing_account
+  prefix                            = var.prefix
+  region                            = var.region
+  retention_days                    = var.retention_days
+  lock_audit_bucket                 = var.lock_audit_bucket
+  enable_log_analytics              = var.enable_log_analytics
+  enable_log_analytics_link         = var.enable_log_analytics_link
+  enable_folder_sink                = true
+  enable_siem_pubsub_sink           = var.enable_siem_pubsub_sink
+  enable_scc_notifications          = var.enable_scc_notifications
+  scc_notification_location         = var.scc_notification_location
+  essential_contacts                = var.essential_contacts
+  foundation_iam_groups             = var.foundation_iam_groups
+  enable_data_access_audit_logs     = var.enable_data_access_audit_logs
+  enable_org_policies               = var.enable_org_policies
+  allowed_resource_locations        = ["in:${var.region}-locations"]
+  allowed_policy_member_domains     = var.allowed_policy_member_domains
+  allowed_contact_domains           = var.allowed_contact_domains
+  denied_storage_auth_types         = var.denied_storage_auth_types
+  allowed_cloud_run_ingress         = var.allowed_cloud_run_ingress
+  allowed_cloud_functions_ingress   = var.allowed_cloud_functions_ingress
+  allowed_protocol_forwarding_types = var.allowed_protocol_forwarding_types
+  labels                            = var.labels
 
   depends_on = [time_sleep.audit_api_propagation]
 }

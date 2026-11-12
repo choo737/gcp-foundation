@@ -90,6 +90,12 @@ variable "allowed_cloud_functions_ingress" {
   description = "Allowed Cloud Functions ingress settings for cloudfunctions.allowedIngressSettings."
 }
 
+variable "allowed_protocol_forwarding_types" {
+  type        = list(string)
+  default     = ["is:INTERNAL"]
+  description = "Allowed protocol forwarding types for compute.restrictProtocolForwardingCreationForTypes."
+}
+
 variable "retention_days" {
   type        = number
   default     = 1095
@@ -100,6 +106,52 @@ variable "lock_audit_bucket" {
   type        = bool
   default     = false
   description = "Whether to lock the central Cloud Logging audit bucket."
+}
+
+variable "enable_log_analytics" {
+  type        = bool
+  default     = true
+  description = "Whether to enable Log Analytics on the central Cloud Logging audit bucket."
+}
+
+variable "enable_log_analytics_link" {
+  type        = bool
+  default     = true
+  description = "Whether to link the Log Analytics audit bucket to a BigQuery dataset."
+}
+
+variable "enable_siem_pubsub_sink" {
+  type        = bool
+  default     = false
+  description = "Whether to create an optional Pub/Sub sink for external SIEM ingestion."
+}
+
+variable "enable_scc_notifications" {
+  type        = bool
+  default     = false
+  description = "Whether to stream HIGH and CRITICAL SCC v2 folder findings to Pub/Sub."
+}
+
+variable "scc_notification_location" {
+  type        = string
+  default     = "global"
+  description = "Location ID for the Security Command Center v2 folder notification config."
+}
+
+variable "essential_contacts" {
+  type = map(object({
+    email        = string
+    categories   = list(string)
+    language_tag = optional(string, "en-US")
+  }))
+  default     = {}
+  description = "Optional Essential Contacts mapped to the root foundation folder."
+}
+
+variable "foundation_iam_groups" {
+  type        = map(string)
+  default     = {}
+  description = "Optional functional IAM groups (audit_viewer, security_reviewer, network_viewer, billing_viewer)."
 }
 
 variable "enable_data_access_audit_logs" {

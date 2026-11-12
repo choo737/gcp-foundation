@@ -39,6 +39,10 @@ module "network_security" {
   enable_cmek               = var.enable_cmek
   kms_protection_level      = var.kms_protection_level
   enable_vpc                = var.enable_vpc
+  subnet_cidr               = var.subnet_cidr
+  enable_vpc_flow_logs      = var.enable_vpc_flow_logs
+  vpc_flow_logs_sampling    = var.vpc_flow_logs_sampling
+  enable_dns_logging        = var.enable_dns_logging
   enable_psc                = var.enable_psc
   enable_vpc_sc             = var.enable_vpc_sc
   enforce_vpc_sc            = var.enforce_vpc_sc

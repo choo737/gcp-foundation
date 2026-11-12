@@ -60,6 +60,30 @@ variable "enable_vpc" {
   description = "Whether to create a shared VPC network and private subnet."
 }
 
+variable "subnet_cidr" {
+  type        = string
+  default     = "10.20.0.0/20"
+  description = "Primary CIDR range for the optional private subnetwork."
+}
+
+variable "enable_vpc_flow_logs" {
+  type        = bool
+  default     = true
+  description = "Whether to enable VPC Flow Logs on the private subnetwork."
+}
+
+variable "vpc_flow_logs_sampling" {
+  type        = number
+  default     = 0.5
+  description = "Sampling rate (0.0 to 1.0) for VPC Flow Logs."
+}
+
+variable "enable_dns_logging" {
+  type        = bool
+  default     = true
+  description = "Whether to enable Cloud DNS query logging on the custom VPC."
+}
+
 variable "enable_psc" {
   type        = bool
   default     = false
