@@ -8,9 +8,10 @@ resource "google_service_account" "etl" {
 }
 
 locals {
-  effective_sa_email = var.service_account_email != "" ? var.service_account_email : google_service_account.etl[0].email
-  effective_database = var.default_database != "" ? var.default_database : var.project_id
-  enable_git_remote  = var.git_remote_url != "" && var.git_token_secret_version != ""
+  effective_sa_email     = var.service_account_email != "" ? var.service_account_email : google_service_account.etl[0].email
+  effective_database     = var.default_database != "" ? var.default_database : var.project_id
+  effective_kms_key_name = var.kms_key_name != null ? trimspace(var.kms_key_name) : ""
+  enable_git_remote      = var.git_remote_url != "" && var.git_token_secret_version != ""
 
   compilation_vars = merge(
     {
@@ -32,7 +33,7 @@ resource "google_dataform_repository" "this" {
   name            = var.repository_name
   display_name    = coalesce(var.display_name, var.repository_name)
   service_account = local.effective_sa_email
-  kms_key_name    = var.kms_key_name != null && trimspace(var.kms_key_name) != "" ? trimspace(var.kms_key_name) : null
+  kms_key_name    = local.effective_kms_key_name != "" ? local.effective_kms_key_name : null
   deletion_policy = var.deletion_policy
   labels          = var.labels
 

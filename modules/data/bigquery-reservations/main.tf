@@ -10,7 +10,7 @@ resource "google_bigquery_reservation" "this" {
   labels            = var.labels
 
   dynamic "autoscale" {
-    for_each = each.value.max_slots != null && each.value.max_slots > 0 ? [each.value.max_slots] : []
+    for_each = (each.value.max_slots != null ? each.value.max_slots : 0) > 0 ? [each.value.max_slots] : []
     content {
       max_slots = autoscale.value
     }

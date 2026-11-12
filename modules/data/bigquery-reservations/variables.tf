@@ -24,7 +24,7 @@ variable "reservations" {
   description = "Map of BigQuery reservations keyed by short reservation name."
 
   validation {
-    condition     = alltrue([for r in values(var.reservations) : r.max_slots == null || (r.max_slots >= 0 && r.max_slots % 50 == 0)])
+    condition     = alltrue([for r in values(var.reservations) : r.max_slots == null ? true : (r.max_slots >= 0 && r.max_slots % 50 == 0)])
     error_message = "Autoscale max_slots must be null or a non-negative multiple of 50."
   }
 }
