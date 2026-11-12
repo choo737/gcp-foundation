@@ -6,10 +6,25 @@ provider "google-beta" {
   region = var.region
 }
 
+data "google_project" "core" {
+  project_id = var.core_storage_project_id
+}
+
+data "google_project" "etl" {
+  project_id = var.etl_compute_project_id
+}
+
+data "google_project" "gold" {
+  project_id = var.primary_gold_project_id
+}
+
 locals {
-  effective_kms_key_id = var.kms_key_id != null ? trimspace(var.kms_key_id) : ""
-  use_cmek             = local.effective_kms_key_id != ""
-  dataset_prefix       = replace(var.prefix, "-", "_")
+  effective_kms_key_id       = var.kms_key_id != null ? trimspace(var.kms_key_id) : ""
+  use_cmek                   = local.effective_kms_key_id != ""
+  dataset_prefix             = replace(var.prefix, "-", "_")
+  trimmed_quarantine_dataset = var.quarantine_dataset_id != null ? trimspace(var.quarantine_dataset_id) : ""
+  effective_quarantine_ds    = local.trimmed_quarantine_dataset != "" ? local.trimmed_quarantine_dataset : "${local.dataset_prefix}_quarantine"
+  effective_vpc_sc_perimeter = var.vpc_sc_perimeter_name != null ? trimspace(var.vpc_sc_perimeter_name) : ""
 
   effective_data_policy_short_id = (
     var.pii_data_policy_short_id != ""
@@ -63,6 +78,21 @@ locals {
     { allow_untagged_pii = "false" },
     local.retail_vars,
   )
+
+  vpc_sc_target_projects = distinct([
+    "projects/${data.google_project.core.number}",
+    "projects/${data.google_project.etl.number}",
+    "projects/${data.google_project.gold.number}",
+  ])
+
+  dataform_etl_account_id = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-dataform-etl"), 0, 30), "-")
+  dataform_runtime_identities = [
+    "serviceAccount:${local.dataform_etl_account_id}@${var.etl_compute_project_id}.iam.gserviceaccount.com",
+    "serviceAccount:service-${data.google_project.etl.number}@gcp-sa-dataform.iam.gserviceaccount.com",
+    "serviceAccount:service-${data.google_project.gold.number}@gcp-sa-dataplex.iam.gserviceaccount.com",
+  ]
+
+  env_labels = merge(var.labels, { environment = var.environment })
 }
 
 resource "google_project_service_identity" "dataform_agent" {
@@ -126,12 +156,12 @@ resource "google_bigquery_dataset_iam_member" "dataform_etl_bronze_viewer" {
   member     = google_service_account.dataform_etl.member
 }
 
-resource "google_bigquery_dataset_iam_member" "dataform_etl_owners" {
+resource "google_bigquery_dataset_iam_member" "dataform_etl_runner" {
   for_each = local.etl_owner_datasets
 
   project    = each.value.project_id
   dataset_id = each.value.dataset_id
-  role       = "roles/bigquery.dataOwner"
+  role       = lookup(var.dataform_custom_role_ids, each.value.project_id, "projects/${each.value.project_id}/roles/dataform_pipeline_runner")
   member     = google_service_account.dataform_etl.member
 }
 
@@ -179,6 +209,42 @@ resource "google_bigquery_dataset_iam_member" "dataplex_gold_viewer" {
   depends_on = [time_sleep.service_identity_propagation]
 }
 
+resource "google_bigquery_dataset_iam_member" "dataplex_silver_viewer" {
+  project    = var.core_storage_project_id
+  dataset_id = var.silver_dataset_id
+  role       = "roles/bigquery.dataViewer"
+  member     = google_project_service_identity.dataplex_agent.member
+
+  depends_on = [time_sleep.service_identity_propagation]
+}
+
+resource "google_bigquery_dataset_iam_member" "dataplex_quarantine_editor" {
+  count = var.enable_quality_scan && local.effective_quarantine_ds != "" ? 1 : 0
+
+  project    = var.core_storage_project_id
+  dataset_id = local.effective_quarantine_ds
+  role       = "roles/bigquery.dataEditor"
+  member     = google_project_service_identity.dataplex_agent.member
+
+  depends_on = [time_sleep.service_identity_propagation]
+}
+
+resource "google_project_iam_member" "dataplex_agent_job_user" {
+  project = var.primary_gold_project_id
+  role    = "roles/bigquery.jobUser"
+  member  = google_project_service_identity.dataplex_agent.member
+
+  depends_on = [time_sleep.service_identity_propagation]
+}
+
+resource "google_project_iam_member" "dataplex_service_agent" {
+  project = var.primary_gold_project_id
+  role    = "roles/dataplex.serviceAgent"
+  member  = google_project_service_identity.dataplex_agent.member
+
+  depends_on = [time_sleep.service_identity_propagation]
+}
+
 data "google_bigquery_default_service_account" "etl" {
   count = local.use_cmek ? 1 : 0
 
@@ -191,6 +257,16 @@ resource "google_kms_crypto_key_iam_member" "dataform_agent_cmek" {
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
   member        = google_project_service_identity.dataform_agent.member
+
+  depends_on = [time_sleep.service_identity_propagation]
+}
+
+resource "google_kms_crypto_key_iam_member" "dataplex_agent_cmek" {
+  count = local.use_cmek ? 1 : 0
+
+  crypto_key_id = local.effective_kms_key_id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  member        = google_project_service_identity.dataplex_agent.member
 
   depends_on = [time_sleep.service_identity_propagation]
 }
@@ -219,13 +295,14 @@ resource "time_sleep" "iam_and_kms_propagation" {
     google_service_account_iam_member.dataform_agent_sa_user,
     google_secret_manager_secret_iam_member.dataform_git_token,
     google_bigquery_dataset_iam_member.dataform_etl_bronze_viewer,
-    google_bigquery_dataset_iam_member.dataform_etl_owners,
+    google_bigquery_dataset_iam_member.dataform_etl_runner,
     google_project_iam_member.dataform_etl_job_user,
     google_project_iam_member.dataform_etl_catalog_viewer,
     google_data_catalog_policy_tag_iam_member.dataform_etl_masked_reader,
     google_data_catalog_policy_tag_iam_member.dataform_etl_restricted_reader,
     google_bigquery_datapolicy_data_policy_iam_member.dataplex_masked_reader,
     google_kms_crypto_key_iam_member.dataform_agent_cmek,
+    google_kms_crypto_key_iam_member.dataplex_agent_cmek,
     google_kms_crypto_key_iam_member.dataform_etl_cmek,
     google_kms_crypto_key_iam_member.bq_etl_ops_cmek,
   ]
@@ -237,6 +314,7 @@ module "dataform_repository" {
   project_id                = var.etl_compute_project_id
   region                    = var.region
   prefix                    = var.prefix
+  environment               = var.environment
   repository_name           = "${var.prefix}-medallion"
   service_account_email     = google_service_account.dataform_etl.email
   kms_key_name              = local.effective_kms_key_id
@@ -253,9 +331,11 @@ module "dataform_repository" {
   gold_dataset              = var.primary_gold_dataset_id
   assertion_schema          = var.assertions_dataset_id
   pii_policy_tag            = var.pii_masked_policy_tag_id
+  pii_masked_policy_tag     = var.pii_masked_policy_tag_id
+  pii_restricted_policy_tag = var.pii_restricted_policy_tag_id
   enable_scheduled_workflow = var.enable_scheduled_workflow
   extra_compilation_vars    = local.extra_compilation_vars
-  labels                    = var.labels
+  labels                    = local.env_labels
 
   depends_on = [time_sleep.iam_and_kms_propagation]
 }
@@ -266,7 +346,12 @@ resource "google_bigquery_table" "pos_orders_cdc" {
   table_id            = "pos_orders_cdc"
   description         = "Seeded bronze POS orders CDC table matching the Medallion Dataform source."
   deletion_protection = !var.delete_contents_on_destroy
-  labels              = var.labels
+  labels              = local.env_labels
+
+  time_partitioning {
+    type  = "DAY"
+    field = "order_date"
+  }
 
   schema = jsonencode([
     {
@@ -276,22 +361,19 @@ resource "google_bigquery_table" "pos_orders_cdc" {
       description = "Unique POS order identifier."
     },
     {
-      name        = "order_date"
-      type        = "DATE"
-      mode        = "NULLABLE"
-      description = "Order booking date."
-    },
-    {
-      name        = "store_id"
-      type        = "STRING"
-      mode        = "NULLABLE"
-      description = "Store identifier."
-    },
-    {
       name        = "customer_id"
       type        = "STRING"
       mode        = "NULLABLE"
       description = "Customer identifier."
+    },
+    {
+      name        = "customer_email"
+      type        = "STRING"
+      mode        = "NULLABLE"
+      description = "Customer email address protected by masked PII tag."
+      policyTags = {
+        names = [var.pii_masked_policy_tag_id]
+      }
     },
     {
       name        = "customer_ic_number"
@@ -303,16 +385,22 @@ resource "google_bigquery_table" "pos_orders_cdc" {
       }
     },
     {
-      name        = "country_code"
+      name        = "store_id"
       type        = "STRING"
       mode        = "NULLABLE"
-      description = "ISO country code."
+      description = "Store identifier."
     },
     {
-      name        = "currency_code"
+      name        = "order_status"
       type        = "STRING"
       mode        = "NULLABLE"
-      description = "ISO currency code."
+      description = "Order lifecycle status."
+    },
+    {
+      name        = "order_date"
+      type        = "DATE"
+      mode        = "NULLABLE"
+      description = "Order booking date."
     },
     {
       name        = "gross_amount"
@@ -327,22 +415,46 @@ resource "google_bigquery_table" "pos_orders_cdc" {
       description = "Discount amount applied to the order."
     },
     {
+      name        = "tax_amount"
+      type        = "NUMERIC"
+      mode        = "NULLABLE"
+      description = "Tax amount applied to the order."
+    },
+    {
       name        = "net_amount"
       type        = "NUMERIC"
       mode        = "NULLABLE"
-      description = "Net order total after discounts."
+      description = "Net order total after discounts and taxes."
     },
     {
-      name        = "status"
+      name        = "currency_code"
       type        = "STRING"
       mode        = "NULLABLE"
-      description = "Order lifecycle status."
+      description = "ISO currency code."
     },
     {
-      name        = "updated_at"
+      name        = "country_code"
+      type        = "STRING"
+      mode        = "NULLABLE"
+      description = "ISO country code."
+    },
+    {
+      name        = "_ingested_at"
       type        = "TIMESTAMP"
       mode        = "NULLABLE"
-      description = "Last CDC update timestamp."
+      description = "CDC ingestion timestamp."
+    },
+    {
+      name        = "_cdc_sequence_num"
+      type        = "INT64"
+      mode        = "NULLABLE"
+      description = "Monotonic CDC sequence number."
+    },
+    {
+      name        = "_op_type"
+      type        = "STRING"
+      mode        = "NULLABLE"
+      description = "CDC operation type (INSERT, UPDATE, DELETE)."
     },
     {
       name        = "_metadata_deleted"
@@ -366,7 +478,12 @@ resource "google_bigquery_table" "crm_customers_cdc" {
   table_id            = "crm_customers_cdc"
   description         = "Seeded bronze CRM customers CDC table matching the Medallion Dataform source."
   deletion_protection = !var.delete_contents_on_destroy
-  labels              = var.labels
+  labels              = local.env_labels
+
+  time_partitioning {
+    type  = "DAY"
+    field = "_ingested_at"
+  }
 
   schema = jsonencode([
     {
@@ -379,7 +496,19 @@ resource "google_bigquery_table" "crm_customers_cdc" {
       name        = "customer_name"
       type        = "STRING"
       mode        = "NULLABLE"
-      description = "Customer full name."
+      description = "Customer full name protected by masked PII tag."
+      policyTags = {
+        names = [var.pii_masked_policy_tag_id]
+      }
+    },
+    {
+      name        = "customer_email"
+      type        = "STRING"
+      mode        = "NULLABLE"
+      description = "Customer email address protected by masked PII tag."
+      policyTags = {
+        names = [var.pii_masked_policy_tag_id]
+      }
     },
     {
       name        = "customer_ic_number"
@@ -403,10 +532,22 @@ resource "google_bigquery_table" "crm_customers_cdc" {
       description = "ISO country code."
     },
     {
-      name        = "updated_at"
+      name        = "_ingested_at"
       type        = "TIMESTAMP"
       mode        = "NULLABLE"
-      description = "Last CDC update timestamp."
+      description = "Ingestion timestamp used for daily partitioning."
+    },
+    {
+      name        = "_cdc_sequence_num"
+      type        = "INT64"
+      mode        = "NULLABLE"
+      description = "Monotonic CDC sequence number."
+    },
+    {
+      name        = "_op_type"
+      type        = "STRING"
+      mode        = "NULLABLE"
+      description = "CDC operation type (INSERT, UPDATE, DELETE)."
     },
     {
       name        = "_metadata_deleted"
@@ -424,13 +565,151 @@ resource "google_bigquery_table" "crm_customers_cdc" {
   }
 }
 
+resource "google_bigquery_table" "fct_orders_seed" {
+  project                  = var.core_storage_project_id
+  dataset_id               = var.silver_dataset_id
+  table_id                 = var.quality_target_table_id
+  description              = "Pre-seeded Silver fct_orders table enabling Day-1 Dataplex quality scan creation."
+  deletion_protection      = !var.delete_contents_on_destroy
+  require_partition_filter = true
+  clustering               = ["customer_id", "currency_code"]
+  labels                   = local.env_labels
+
+  time_partitioning {
+    type  = "DAY"
+    field = "order_date"
+  }
+
+  schema = jsonencode([
+    {
+      name        = "order_id"
+      type        = "STRING"
+      mode        = "REQUIRED"
+      description = "Unique POS order identifier."
+    },
+    {
+      name        = "customer_id"
+      type        = "STRING"
+      mode        = "NULLABLE"
+      description = "Customer identifier."
+    },
+    {
+      name        = "customer_email"
+      type        = "STRING"
+      mode        = "NULLABLE"
+      description = "Customer email address protected by masked PII tag."
+      policyTags = {
+        names = [var.pii_masked_policy_tag_id]
+      }
+    },
+    {
+      name        = "customer_ic_number"
+      type        = "STRING"
+      mode        = "NULLABLE"
+      description = "Customer national identity number protected by restricted PII tag."
+      policyTags = {
+        names = [var.pii_restricted_policy_tag_id]
+      }
+    },
+    {
+      name        = "store_id"
+      type        = "STRING"
+      mode        = "NULLABLE"
+      description = "Store identifier."
+    },
+    {
+      name        = "order_status"
+      type        = "STRING"
+      mode        = "NULLABLE"
+      description = "Order lifecycle status."
+    },
+    {
+      name        = "order_date"
+      type        = "DATE"
+      mode        = "NULLABLE"
+      description = "Order booking date."
+    },
+    {
+      name        = "gross_amount"
+      type        = "NUMERIC"
+      mode        = "NULLABLE"
+      description = "Gross order total before discounts."
+    },
+    {
+      name        = "discount_amount"
+      type        = "NUMERIC"
+      mode        = "NULLABLE"
+      description = "Discount amount applied to the order."
+    },
+    {
+      name        = "tax_amount"
+      type        = "NUMERIC"
+      mode        = "NULLABLE"
+      description = "Tax amount applied to the order."
+    },
+    {
+      name        = "net_amount"
+      type        = "NUMERIC"
+      mode        = "NULLABLE"
+      description = "Net order total after discounts and taxes."
+    },
+    {
+      name        = "currency_code"
+      type        = "STRING"
+      mode        = "NULLABLE"
+      description = "ISO currency code."
+    },
+    {
+      name        = "_ingested_at"
+      type        = "TIMESTAMP"
+      mode        = "NULLABLE"
+      description = "CDC ingestion timestamp."
+    },
+    {
+      name        = "_cdc_sequence_num"
+      type        = "INT64"
+      mode        = "NULLABLE"
+      description = "Monotonic CDC sequence number."
+    },
+    {
+      name        = "_op_type"
+      type        = "STRING"
+      mode        = "NULLABLE"
+      description = "CDC operation type."
+    },
+    {
+      name        = "ingested_at"
+      type        = "TIMESTAMP"
+      mode        = "NULLABLE"
+      description = "Silver ingestion timestamp."
+    },
+    {
+      name        = "record_hash"
+      type        = "STRING"
+      mode        = "NULLABLE"
+      description = "SHA-256 hash of key order attributes."
+    }
+  ])
+
+  dynamic "encryption_configuration" {
+    for_each = local.use_cmek ? [local.effective_kms_key_id] : []
+    content {
+      kms_key_name = encryption_configuration.value
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [schema, description, labels]
+  }
+}
+
 resource "google_bigquery_table" "masked_customers_canary" {
   project             = var.primary_gold_project_id
   dataset_id          = var.primary_gold_dataset_id
   table_id            = "masked_customers_canary"
   description         = "Seeded Gold canary table with PII masking policy tags on name and identity number."
   deletion_protection = !var.delete_contents_on_destroy
-  labels              = var.labels
+  labels              = local.env_labels
 
   schema = jsonencode([
     {
@@ -485,8 +764,9 @@ resource "google_bigquery_dataset" "ops_telemetry" {
   friendly_name              = "${var.prefix} Ops Telemetry"
   description                = "Operational BigQuery job cost and slot telemetry dataset in data-etl."
   location                   = var.region
+  max_time_travel_hours      = 168
   delete_contents_on_destroy = var.delete_contents_on_destroy
-  labels                     = var.labels
+  labels                     = local.env_labels
 
   dynamic "default_encryption_configuration" {
     for_each = local.use_cmek ? [local.effective_kms_key_id] : []
@@ -504,7 +784,7 @@ resource "google_bigquery_table" "ops_job_cost_monitor" {
   table_id            = "ops_job_cost_monitor"
   description         = "Operational BigQuery job cost and slot monitoring view over ETL compute."
   deletion_protection = !var.delete_contents_on_destroy
-  labels              = var.labels
+  labels              = local.env_labels
 
   view {
     query          = <<-SQL
@@ -532,17 +812,28 @@ resource "time_sleep" "dataplex_iam_propagation" {
     time_sleep.iam_and_kms_propagation,
     google_bigquery_datapolicy_data_policy_iam_member.dataplex_masked_reader,
     google_bigquery_dataset_iam_member.dataplex_gold_viewer,
+    google_bigquery_dataset_iam_member.dataplex_silver_viewer,
+    google_bigquery_dataset_iam_member.dataplex_quarantine_editor,
+    google_project_iam_member.dataplex_agent_job_user,
+    google_project_iam_member.dataplex_service_agent,
     google_bigquery_table.masked_customers_canary,
+    google_bigquery_table.fct_orders_seed,
   ]
 }
 
 module "dataplex_scans" {
   source = "../../../modules/data/dataplex-scans"
 
-  project_id = var.primary_gold_project_id
-  region     = var.region
-  prefix     = var.prefix
-  labels     = var.labels
+  project_id                = var.primary_gold_project_id
+  region                    = var.region
+  prefix                    = var.prefix
+  enable_quality_scan       = var.enable_quality_scan
+  quality_target_project_id = var.core_storage_project_id
+  quality_target_dataset_id = var.silver_dataset_id
+  quality_target_table_id   = var.quality_target_table_id
+  quarantine_dataset_id     = local.effective_quarantine_ds
+  quality_results_table     = var.quality_results_table
+  labels                    = local.env_labels
 
   profile_tables = {
     masked_customers_canary = {
@@ -555,4 +846,56 @@ module "dataplex_scans" {
   }
 
   depends_on = [time_sleep.dataplex_iam_propagation]
+}
+
+resource "google_access_context_manager_service_perimeter_dry_run_ingress_policy" "dataform_runtime" {
+  count = local.effective_vpc_sc_perimeter != "" && !var.enforce_vpc_sc ? 1 : 0
+
+  perimeter = local.effective_vpc_sc_perimeter
+  title     = "${var.prefix}-${var.environment}-dataform-ingress"
+
+  ingress_from {
+    identities = local.dataform_runtime_identities
+    sources {
+      access_level = "*"
+    }
+  }
+
+  ingress_to {
+    resources = local.vpc_sc_target_projects
+    operations {
+      service_name = "*"
+    }
+  }
+
+  depends_on = [
+    google_service_account.dataform_etl,
+    time_sleep.service_identity_propagation,
+  ]
+}
+
+resource "google_access_context_manager_service_perimeter_ingress_policy" "dataform_runtime" {
+  count = local.effective_vpc_sc_perimeter != "" && var.enforce_vpc_sc ? 1 : 0
+
+  perimeter = local.effective_vpc_sc_perimeter
+  title     = "${var.prefix}-${var.environment}-dataform-ingress"
+
+  ingress_from {
+    identities = local.dataform_runtime_identities
+    sources {
+      access_level = "*"
+    }
+  }
+
+  ingress_to {
+    resources = local.vpc_sc_target_projects
+    operations {
+      service_name = "*"
+    }
+  }
+
+  depends_on = [
+    google_service_account.dataform_etl,
+    time_sleep.service_identity_propagation,
+  ]
 }

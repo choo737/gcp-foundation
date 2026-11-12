@@ -1,3 +1,11 @@
+locals {
+  effective_bi_project_id = var.bi_project_id != null ? trimspace(var.bi_project_id) : ""
+  effective_assignments = merge(
+    local.effective_bi_project_id != "" ? { (local.effective_bi_project_id) = "adhoc" } : {},
+    var.assignments,
+  )
+}
+
 resource "google_bigquery_reservation" "this" {
   for_each = var.reservations
 
@@ -18,7 +26,7 @@ resource "google_bigquery_reservation" "this" {
 }
 
 resource "google_bigquery_reservation_assignment" "this" {
-  for_each = var.assignments
+  for_each = local.effective_assignments
 
   project     = var.project_id
   location    = var.region

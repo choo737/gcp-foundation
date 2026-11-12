@@ -1,18 +1,31 @@
 locals {
-  clean_access_policy_id = replace(var.access_policy_id, "accessPolicies/", "")
+  clean_access_policy_id         = replace(var.access_policy_id, "accessPolicies/", "")
+  effective_network_project_num  = var.network_project_number != null ? trimspace(var.network_project_number) : ""
+  effective_audit_project_num    = var.vpc_sc_audit_project_number != null ? trimspace(var.vpc_sc_audit_project_number) : ""
+  effective_dr_region            = var.dr_region != null ? trimspace(var.dr_region) : ""
+  create_dr_cmek                 = var.enable_cmek && local.effective_dr_region != "" && local.effective_dr_region != var.region
+  initial_vpc_sc_project_numbers = distinct(compact(concat([local.effective_network_project_num], var.perimeter_project_numbers)))
+  initial_vpc_sc_resources       = [for num in local.initial_vpc_sc_project_numbers : "projects/${num}"]
 
   vpc_sc_restricted_services = [
+    "artifactregistry.googleapis.com",
     "bigquery.googleapis.com",
     "bigquerydatapolicy.googleapis.com",
-    "bigqueryreservation.googleapis.com",
-    "storage.googleapis.com",
-    "datacatalog.googleapis.com",
-    "dataplex.googleapis.com",
-    "dataform.googleapis.com",
+    "bigquerydatatransfer.googleapis.com",
     "cloudkms.googleapis.com",
-    "secretmanager.googleapis.com",
+    "cloudscheduler.googleapis.com",
+    "datacatalog.googleapis.com",
+    "dataform.googleapis.com",
+    "dataplex.googleapis.com",
+    "datastream.googleapis.com",
+    "eventarc.googleapis.com",
     "logging.googleapis.com",
+    "monitoring.googleapis.com",
     "pubsub.googleapis.com",
+    "run.googleapis.com",
+    "secretmanager.googleapis.com",
+    "storage.googleapis.com",
+    "workflows.googleapis.com",
   ]
 
   psc_artifact_dns_zones = var.enable_vpc && var.enable_psc ? {
@@ -51,6 +64,30 @@ resource "google_kms_crypto_key" "this" {
   }
 }
 
+resource "google_kms_key_ring" "dr" {
+  count = local.create_dr_cmek ? 1 : 0
+
+  project  = var.project_id
+  name     = "${var.prefix}-dr-keyring"
+  location = local.effective_dr_region
+}
+
+resource "google_kms_crypto_key" "dr" {
+  count = local.create_dr_cmek ? 1 : 0
+
+  name                       = "${var.prefix}-dr-cmek-key"
+  key_ring                   = google_kms_key_ring.dr[0].id
+  purpose                    = "ENCRYPT_DECRYPT"
+  rotation_period            = "7776000s"
+  destroy_scheduled_duration = "2592000s"
+  labels                     = var.labels
+
+  version_template {
+    algorithm        = "GOOGLE_SYMMETRIC_ENCRYPTION"
+    protection_level = var.kms_protection_level
+  }
+}
+
 resource "google_compute_network" "this" {
   count = var.enable_vpc ? 1 : 0
 
@@ -58,6 +95,13 @@ resource "google_compute_network" "this" {
   name                    = "${var.prefix}-vpc"
   auto_create_subnetworks = false
   routing_mode            = "GLOBAL"
+}
+
+resource "google_compute_shared_vpc_host_project" "this" {
+  count = var.enable_vpc && var.enable_shared_vpc_host ? 1 : 0
+
+  project    = var.project_id
+  depends_on = [google_compute_network.this]
 }
 
 resource "google_compute_subnetwork" "this" {
@@ -78,6 +122,29 @@ resource "google_compute_subnetwork" "this" {
       metadata             = "INCLUDE_ALL_METADATA"
     }
   }
+}
+
+resource "google_compute_subnetwork" "datastream_nat" {
+  count = var.enable_vpc && var.enable_datastream_psc_attachment ? 1 : 0
+
+  project                  = var.project_id
+  name                     = "${var.prefix}-${var.environment}-datastream-nat"
+  region                   = var.region
+  network                  = google_compute_network.this[0].id
+  ip_cidr_range            = var.datastream_nat_subnet_cidr
+  private_ip_google_access = true
+}
+
+resource "google_compute_network_attachment" "datastream" {
+  count = var.enable_vpc && var.enable_datastream_psc_attachment ? 1 : 0
+
+  project               = var.project_id
+  region                = var.region
+  name                  = "${var.prefix}-${var.environment}-datastream-psc"
+  description           = "Private Service Connect network attachment for Datastream CDC."
+  connection_preference = length(var.datastream_producer_accept_lists) > 0 ? "ACCEPT_MANUAL" : "ACCEPT_AUTOMATIC"
+  subnetworks           = [google_compute_subnetwork.datastream_nat[0].self_link]
+  producer_accept_lists = length(var.datastream_producer_accept_lists) > 0 ? var.datastream_producer_accept_lists : null
 }
 
 resource "google_dns_policy" "logging" {
@@ -234,6 +301,28 @@ resource "google_compute_network_firewall_policy_rule" "allow_psc_egress" {
   }
 }
 
+resource "google_compute_network_firewall_policy_rule" "allow_private_db_egress" {
+  count = var.enable_vpc && var.enable_psc && length(var.allowed_private_db_cidrs) > 0 ? 1 : 0
+
+  project         = var.project_id
+  firewall_policy = google_compute_network_firewall_policy.egress[0].name
+  rule_name       = "${var.prefix}-allow-private-db"
+  description     = "Allow PostgreSQL and MySQL egress to authorized private source DB CIDRs."
+  direction       = "EGRESS"
+  priority        = 1100
+  action          = "allow"
+  enable_logging  = true
+
+  match {
+    dest_ip_ranges = var.allowed_private_db_cidrs
+
+    layer4_configs {
+      ip_protocol = "tcp"
+      ports       = ["5432", "3306"]
+    }
+  }
+}
+
 resource "google_compute_network_firewall_policy_rule" "deny_all_egress" {
   count = var.enable_vpc && var.enable_psc ? 1 : 0
 
@@ -255,28 +344,151 @@ resource "google_compute_network_firewall_policy_rule" "deny_all_egress" {
   }
 }
 
+resource "google_access_context_manager_access_level" "trusted" {
+  count = var.enable_vpc_sc && local.clean_access_policy_id != "" && length(var.vpc_sc_access_level_members) > 0 ? 1 : 0
+
+  parent = "accessPolicies/${local.clean_access_policy_id}"
+  name   = "accessPolicies/${local.clean_access_policy_id}/accessLevels/${replace(var.prefix, "-", "_")}_${var.environment}_trusted"
+  title  = "${var.prefix}-${var.environment}-trusted"
+
+  basic {
+    conditions {
+      members = var.vpc_sc_access_level_members
+    }
+  }
+}
+
 resource "google_access_context_manager_service_perimeter" "perimeter" {
   count = var.enable_vpc_sc && local.clean_access_policy_id != "" ? 1 : 0
 
   parent                    = "accessPolicies/${local.clean_access_policy_id}"
-  name                      = "accessPolicies/${local.clean_access_policy_id}/servicePerimeters/${replace(var.prefix, "-", "_")}_data_perimeter"
-  title                     = "${var.prefix}-data-perimeter"
+  name                      = "accessPolicies/${local.clean_access_policy_id}/servicePerimeters/${replace(var.prefix, "-", "_")}_${var.environment}_data_perimeter"
+  title                     = "${var.prefix}-${var.environment}-data-perimeter"
   perimeter_type            = "PERIMETER_TYPE_REGULAR"
   use_explicit_dry_run_spec = !var.enforce_vpc_sc
 
   dynamic "spec" {
     for_each = !var.enforce_vpc_sc ? [1] : []
     content {
-      resources           = [for num in var.perimeter_project_numbers : "projects/${num}"]
+      resources           = local.initial_vpc_sc_resources
       restricted_services = local.vpc_sc_restricted_services
+      access_levels       = length(google_access_context_manager_access_level.trusted) > 0 ? [google_access_context_manager_access_level.trusted[0].name] : []
+
+      vpc_accessible_services {
+        enable_restriction = true
+        allowed_services   = ["RESTRICTED-SERVICES"]
+      }
+
+      dynamic "ingress_policies" {
+        for_each = length(var.vpc_sc_ingress_principals) > 0 ? [1] : []
+        content {
+          title = "${var.prefix}-${var.environment}-trusted-ingress"
+          ingress_from {
+            identities = var.vpc_sc_ingress_principals
+            sources {
+              access_level = "*"
+            }
+          }
+          ingress_to {
+            resources = ["*"]
+            operations {
+              service_name = "*"
+            }
+          }
+        }
+      }
+
+      dynamic "egress_policies" {
+        for_each = local.effective_audit_project_num != "" ? [1] : []
+        content {
+          title = "${var.prefix}-${var.environment}-audit-egress"
+          egress_from {
+            identity_type = "ANY_IDENTITY"
+          }
+          egress_to {
+            resources = ["projects/${local.effective_audit_project_num}"]
+            operations {
+              service_name = "logging.googleapis.com"
+              method_selectors {
+                method = "*"
+              }
+            }
+            operations {
+              service_name = "bigquery.googleapis.com"
+              method_selectors {
+                method = "*"
+              }
+            }
+          }
+        }
+      }
     }
   }
 
   dynamic "status" {
     for_each = var.enforce_vpc_sc ? [1] : []
     content {
-      resources           = [for num in var.perimeter_project_numbers : "projects/${num}"]
+      resources           = local.initial_vpc_sc_resources
       restricted_services = local.vpc_sc_restricted_services
+      access_levels       = length(google_access_context_manager_access_level.trusted) > 0 ? [google_access_context_manager_access_level.trusted[0].name] : []
+
+      vpc_accessible_services {
+        enable_restriction = true
+        allowed_services   = ["RESTRICTED-SERVICES"]
+      }
+
+      dynamic "ingress_policies" {
+        for_each = length(var.vpc_sc_ingress_principals) > 0 ? [1] : []
+        content {
+          title = "${var.prefix}-${var.environment}-trusted-ingress"
+          ingress_from {
+            identities = var.vpc_sc_ingress_principals
+            sources {
+              access_level = "*"
+            }
+          }
+          ingress_to {
+            resources = ["*"]
+            operations {
+              service_name = "*"
+            }
+          }
+        }
+      }
+
+      dynamic "egress_policies" {
+        for_each = local.effective_audit_project_num != "" ? [1] : []
+        content {
+          title = "${var.prefix}-${var.environment}-audit-egress"
+          egress_from {
+            identity_type = "ANY_IDENTITY"
+          }
+          egress_to {
+            resources = ["projects/${local.effective_audit_project_num}"]
+            operations {
+              service_name = "logging.googleapis.com"
+              method_selectors {
+                method = "*"
+              }
+            }
+            operations {
+              service_name = "bigquery.googleapis.com"
+              method_selectors {
+                method = "*"
+              }
+            }
+          }
+        }
+      }
     }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      status[0].resources,
+      spec[0].resources,
+      status[0].ingress_policies,
+      spec[0].ingress_policies,
+    ]
   }
 }

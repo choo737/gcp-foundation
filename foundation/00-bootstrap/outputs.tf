@@ -23,6 +23,26 @@ output "wif_provider_name" {
   description = "Workload Identity Pool Provider resource name, or null when WIF is disabled."
 }
 
+output "ci_service_account_emails" {
+  value       = { for k, sa in google_service_account.ci : k => sa.email }
+  description = "Map of dedicated CI service account keys to email addresses."
+}
+
+output "tf_foundation_ci_sa_email" {
+  value       = try(google_service_account.ci["tf_foundation_ci"].email, "")
+  description = "Service account email for foundation Terraform CI runs."
+}
+
+output "tf_ingestion_ci_sa_email" {
+  value       = try(google_service_account.ci["tf_ingestion_ci"].email, "")
+  description = "Service account email for ingestion Terraform CI runs."
+}
+
+output "dataform_ci_sa_email" {
+  value       = try(google_service_account.ci["dataform_ci"].email, "")
+  description = "Service account email for Dataform CI checks."
+}
+
 output "region" {
   value       = var.region
   description = "Default GCP region propagated to downstream stages."

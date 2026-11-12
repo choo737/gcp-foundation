@@ -370,7 +370,9 @@ class AgenticContextAndToolingTest(unittest.TestCase):
                 self.assertRegex(stage_main, rf"{var_name}\s*=\s*var\.{var_name}")
 
         self.assertIn('"essentialcontacts.googleapis.com"', stage_main)
-        self.assertRegex(stage_main, r"allowed_resource_locations\s*=\s*\[\"in:\$\{var\.region\}-locations\"\]")
+        self.assertRegex(stage_main, r"allowed_resource_locations\s*=\s*local\.allowed_resource_locations")
+        self.assertIn('"in:${var.region}-locations"', stage_main)
+        self.assertIn('"in:${local.trimmed_dr_region}-locations"', stage_main)
         self.assertIn('output "enforced_org_policy_names"', stage_outs)
 
     def test_link_stages_gcs_export_and_from_gcs(self) -> None:

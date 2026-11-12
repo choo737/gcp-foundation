@@ -1,20 +1,20 @@
 # Enterprise Data Stage 02: Governance Operations
 
-This stage seeds Bronze tables, creates the Dataform repo, and configures Dataplex scans.
+This stage seeds partitioned Bronze tables, creates the Dataform repo, and configures Dataplex scans.
 
 ## Resources Deployed
 
-- Seeded `pos_orders_cdc` and `crm_customers_cdc` tables in `data-core` with `pii_restricted` tags.
+- Partitioned `pos_orders_cdc`, `crm_customers_cdc`, and pre-seeded `silver.fct_orders` tables in `data-core`.
 - Seeded `masked_customers_canary` table in `data-<primary_domain>` with `pii_masked` tags.
 - Dedicated `ops_telemetry` dataset and `ops_job_cost_monitor` view inside `data-etl`.
-- Cross-project Dataform repository and least-privilege IAM grants inside `data-etl`.
-- On-demand Dataplex profile scan on `masked_customers_canary`.
+- Cross-project Dataform repository bound to the custom `dataform_pipeline_runner` role.
+- On-demand Dataplex profile and `silver.fct_orders` data quality scans.
+- Optional VPC-SC runtime ingress policies for Dataform and Dataplex service identities.
 
 ## Usage
 
 ```bash
 ../../../scripts/link-stages.sh ../01-platform .
-terraform init
-terraform plan
-terraform apply
+terraform init -backend-config="bucket=<tfstate-bucket>" -backend-config="prefix=data/enterprise/02-governance-ops/dev"
+terraform plan -var-file=envs/dev.tfvars.example
 ```

@@ -39,6 +39,12 @@ variable "assertions_dataset_id" {
   description = "Core Silver assertions dataset ID."
 }
 
+variable "quarantine_dataset_id" {
+  type        = string
+  default     = ""
+  description = "Optional quarantine dataset ID for Dataplex quality results export."
+}
+
 variable "primary_gold_dataset_id" {
   type        = string
   description = "Primary Gold mart dataset ID."
@@ -48,6 +54,12 @@ variable "domain_gold_dataset_ids" {
   type        = map(string)
   default     = {}
   description = "Map of domain codes to Gold mart dataset IDs from stage 01."
+}
+
+variable "dataform_custom_role_ids" {
+  type        = map(string)
+  default     = {}
+  description = "Optional map of project IDs to custom dataform_pipeline_runner role IDs from stage 01."
 }
 
 variable "pii_masked_policy_tag_id" {
@@ -70,6 +82,24 @@ variable "kms_key_id" {
   type        = string
   default     = ""
   description = "Optional regional CMEK crypto key resource ID from stage 01."
+}
+
+variable "vpc_sc_perimeter_name" {
+  type        = string
+  default     = ""
+  description = "Optional full VPC-SC service perimeter name for Dataform runtime ingress."
+}
+
+variable "enforce_vpc_sc" {
+  type        = bool
+  default     = false
+  description = "Whether the VPC-SC perimeter is in enforced mode instead of dry-run mode."
+}
+
+variable "environment" {
+  type        = string
+  default     = "dev"
+  description = "Target lifecycle environment name (for example dev, staging, prod)."
 }
 
 variable "region" {
@@ -99,7 +129,7 @@ variable "medallion_git_branch" {
 variable "git_release_commitish" {
   type        = string
   default     = "main"
-  description = "Git branch, tag, or commit SHA compiled by the prod-main release config."
+  description = "Git branch, tag, or commit SHA compiled by the Dataform release config."
 }
 
 variable "git_token_secret_version" {
@@ -115,8 +145,26 @@ variable "git_token_secret_version" {
 
 variable "enable_scheduled_workflow" {
   type        = bool
+  default     = false
+  description = "Whether to enable a standalone Dataform workflow schedule (false when Cloud Workflows triggers runs)."
+}
+
+variable "enable_quality_scan" {
+  type        = bool
   default     = true
-  description = "Whether to enable a daily scheduled Dataform workflow run."
+  description = "Whether to provision the Dataplex data quality scan on silver.fct_orders."
+}
+
+variable "quality_target_table_id" {
+  type        = string
+  default     = "fct_orders"
+  description = "BigQuery table ID in silver_curated targeted by the Dataplex data quality scan."
+}
+
+variable "quality_results_table" {
+  type        = string
+  default     = ""
+  description = "Optional full BigQuery resource URI for Dataplex quality results export."
 }
 
 variable "delete_contents_on_destroy" {

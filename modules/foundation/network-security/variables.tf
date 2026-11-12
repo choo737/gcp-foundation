@@ -3,14 +3,32 @@ variable "project_id" {
   description = "Security and network project ID hosting KMS and VPC resources."
 }
 
+variable "network_project_number" {
+  type        = string
+  default     = ""
+  description = "Optional numeric project number for the network project added to the VPC-SC perimeter."
+}
+
 variable "region" {
   type        = string
   description = "GCP region for KMS key rings and optional subnetworks."
 }
 
+variable "dr_region" {
+  type        = string
+  default     = null
+  description = "Optional disaster recovery GCP region for a secondary CMEK key."
+}
+
 variable "prefix" {
   type        = string
   description = "Name prefix applied to KMS, VPC, and perimeter resources."
+}
+
+variable "environment" {
+  type        = string
+  default     = "dev"
+  description = "Target lifecycle environment name (for example dev, staging, prod)."
 }
 
 variable "enable_cmek" {
@@ -36,10 +54,40 @@ variable "enable_vpc" {
   description = "Whether to provision a custom VPC network and private subnet."
 }
 
+variable "enable_shared_vpc_host" {
+  type        = bool
+  default     = false
+  description = "Whether to register this network project as a Shared VPC host."
+}
+
 variable "subnet_cidr" {
   type        = string
   default     = "10.20.0.0/20"
   description = "Primary CIDR range for the optional subnetwork."
+}
+
+variable "enable_datastream_psc_attachment" {
+  type        = bool
+  default     = false
+  description = "Whether to provision a PSC NAT subnet and Network Attachment for Datastream."
+}
+
+variable "datastream_nat_subnet_cidr" {
+  type        = string
+  default     = "10.20.16.0/24"
+  description = "CIDR range for the Datastream PSC network attachment subnet."
+}
+
+variable "datastream_producer_accept_lists" {
+  type        = list(string)
+  default     = []
+  description = "Optional producer project IDs allowed to connect to the Datastream Network Attachment."
+}
+
+variable "allowed_private_db_cidrs" {
+  type        = list(string)
+  default     = []
+  description = "Optional private DB CIDRs allowed egress on TCP 5432 and 3306."
 }
 
 variable "enable_vpc_flow_logs" {
@@ -99,6 +147,24 @@ variable "perimeter_project_numbers" {
   type        = list(string)
   default     = []
   description = "Project numbers included in the VPC-SC perimeter."
+}
+
+variable "vpc_sc_ingress_principals" {
+  type        = list(string)
+  default     = []
+  description = "IAM principals (for example CI WIF SAs or break-glass admins) allowed VPC-SC ingress."
+}
+
+variable "vpc_sc_audit_project_number" {
+  type        = string
+  default     = ""
+  description = "Optional audit project number allowed VPC-SC egress for logging and BigQuery."
+}
+
+variable "vpc_sc_access_level_members" {
+  type        = list(string)
+  default     = []
+  description = "Optional IAM members for an ACM access level attached to the VPC-SC perimeter."
 }
 
 variable "labels" {

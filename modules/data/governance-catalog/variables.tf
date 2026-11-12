@@ -13,6 +13,12 @@ variable "prefix" {
   description = "Resource name prefix used for taxonomy and policy IDs."
 }
 
+variable "environment" {
+  type        = string
+  default     = ""
+  description = "Optional environment name included in the org-unique taxonomy display name."
+}
+
 variable "masking_expression" {
   type        = string
   default     = "LAST_FOUR_CHARACTERS"

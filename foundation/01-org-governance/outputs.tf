@@ -18,9 +18,49 @@ output "data_folder_id" {
   description = "Alias for data_platform_folder_id consumed by enterprise data stage 01."
 }
 
+output "environment_folder_ids" {
+  value       = module.folder_hierarchy.environment_folder_ids
+  description = "Map of environment names to 02-environments/<env> folder resource names."
+}
+
+output "environment_data_platform_folder_ids" {
+  value       = module.folder_hierarchy.environment_data_platform_folder_ids
+  description = "Map of environment names to per-environment data-platform folder resource names."
+}
+
+output "environment_storage_folder_ids" {
+  value       = module.folder_hierarchy.environment_storage_folder_ids
+  description = "Map of environment names to per-environment storage folder resource names."
+}
+
+output "environment_compute_folder_ids" {
+  value       = module.folder_hierarchy.environment_compute_folder_ids
+  description = "Map of environment names to per-environment compute folder resource names."
+}
+
+output "storage_folder_id" {
+  value       = module.folder_hierarchy.storage_folder_id
+  description = "Default storage folder resource name for backwards compatibility."
+}
+
+output "compute_folder_id" {
+  value       = module.folder_hierarchy.compute_folder_id
+  description = "Default compute folder resource name for backwards compatibility."
+}
+
 output "audit_project_id" {
   value       = module.audit_project.project_id
   description = "Central audit logging and FinOps project ID."
+}
+
+output "audit_project_number" {
+  value       = module.audit_project.project_number
+  description = "Numeric audit project number for VPC-SC audit egress."
+}
+
+output "audit_project_lien_name" {
+  value       = try(google_resource_manager_lien.audit_project[0].name, "")
+  description = "Resource Manager deletion lien name on the audit project, or empty string."
 }
 
 output "billing_export_dataset_id" {
@@ -51,6 +91,11 @@ output "billing_account" {
 output "region" {
   value       = var.region
   description = "Default GCP region propagated to downstream stages."
+}
+
+output "dr_region" {
+  value       = var.dr_region
+  description = "Optional disaster recovery GCP region propagated downstream."
 }
 
 output "prefix" {

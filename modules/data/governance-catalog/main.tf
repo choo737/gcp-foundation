@@ -5,7 +5,9 @@ locals {
     "dataplex.googleapis.com",
   ]) : toset([])
 
-  data_policy_id = "${replace(var.prefix, "-", "_")}_pii_mask"
+  data_policy_id        = "${replace(var.prefix, "-", "_")}_pii_mask"
+  trimmed_env           = var.environment != null ? trimspace(var.environment) : ""
+  taxonomy_display_name = local.trimmed_env != "" ? "${var.prefix}-${local.trimmed_env}-pii-taxonomy" : "${var.prefix}-pii-taxonomy"
 }
 
 resource "google_project_service" "required" {
@@ -19,7 +21,7 @@ resource "google_project_service" "required" {
 resource "google_data_catalog_taxonomy" "pii" {
   project                = var.project_id
   region                 = var.region
-  display_name           = "${var.prefix}-pii-taxonomy"
+  display_name           = local.taxonomy_display_name
   description            = "Fine-grained PII classification taxonomy."
   activated_policy_types = ["FINE_GRAINED_ACCESS_CONTROL"]
 

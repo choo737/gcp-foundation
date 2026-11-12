@@ -1,20 +1,20 @@
 # Foundation Stage 02: Security and Network
 
-This stage deploys the central KMS key ring, crypto key, and optional VPC controls.
+This stage deploys KMS keys, VPC controls, VPC-SC perimeters, and Cloud Monitoring alerts.
 
 ## Resources Deployed
 
-- `${prefix}-network` project inside `01-shared-infrastructure`.
-- Regional Cloud KMS key ring and CMEK key with 90-day rotation.
-- Optional custom VPC, subnet with Flow Logs, and Cloud DNS query logging.
+- `${prefix}-network` project placed in `02-environments/<env>` or `shared_infra_folder_id`.
+- Primary and optional DR Cloud KMS key rings and crypto keys.
+- Optional Shared VPC host, subnet with Flow Logs, DNS logging, and Datastream PSC attachment.
 - Optional PSC endpoint with `googleapis.com.`, `pkg.dev.`, and `gcr.io.` private DNS zones.
-- Network firewall policy allowing PSC TCP 443 with default deny-all egress and dry-run VPC-SC.
+- Network firewall policy with TCP 443 PSC allow, optional DB egress, and deny-all egress.
+- Environment-scoped VPC-SC perimeter and five Cloud Monitoring alert policies.
 
 ## Usage
 
 ```bash
 ../../scripts/link-stages.sh ../01-org-governance .
-terraform init
-terraform plan
-terraform apply
+terraform init -backend-config="bucket=<tfstate-bucket>" -backend-config="prefix=foundation/02-security-network/dev"
+terraform plan -var-file=envs/dev.tfvars.example
 ```

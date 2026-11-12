@@ -4,73 +4,74 @@ set -euo pipefail
 usage() {
   cat >&2 <<'USAGE'
 Usage:
-  scripts/link-stages.sh <source_stage_dir> [<source_stage_dir> ...] <target_stage_dir>
-  scripts/link-stages.sh --export-gcs gs://<bucket>/<stage>.json <source_stage_dir>
-  scripts/link-stages.sh --from-gcs gs://<bucket>/<stage1>.json [gs://<bucket>/<stage2>.json ...] <target_stage_dir>
+  scripts/link-stages.sh [--env <env>] <source_stage_dir> [<source_stage_dir> ...] <target_stage_dir>
+  scripts/link-stages.sh [--env <env>] --export-gcs gs://<bucket>/<stage>.json <source_stage_dir> [<source_stage_dir> ...]
+  scripts/link-stages.sh [--env <env>] --from-gcs gs://<bucket>/<stage1>.json [gs://<bucket>/<stage2>.json ...] <target_stage_dir>
 USAGE
 }
 
-if [ "$#" -lt 2 ]; then
-  usage
-  exit 1
-fi
-
+env_name=""
 mode="local"
-if [ "$1" = "--export-gcs" ]; then
-  mode="export-gcs"
-  if [ "$#" -ne 3 ]; then
+gcs_export_uri=""
+positional=()
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --env)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 1
+      fi
+      env_name="$2"
+      shift 2
+      ;;
+    --export-gcs)
+      if [ "$#" -lt 2 ] || [ "$mode" != "local" ]; then
+        usage
+        exit 1
+      fi
+      mode="export-gcs"
+      gcs_export_uri="$2"
+      shift 2
+      ;;
+    --from-gcs)
+      if [ "$mode" != "local" ]; then
+        usage
+        exit 1
+      fi
+      mode="from-gcs"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      positional+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if [ "$mode" = "export-gcs" ]; then
+  if [ "${#positional[@]}" -lt 1 ]; then
     usage
     exit 1
   fi
-  gcs_uri="$2"
-  source_dir="$3"
-  if [[ ! "$gcs_uri" =~ ^gs://[^/]+/.+ ]]; then
-    echo "Invalid GCS URI: $gcs_uri" >&2
+  if [[ ! "$gcs_export_uri" =~ ^gs://[^/]+/.+ ]]; then
+    echo "Invalid GCS URI: $gcs_export_uri" >&2
     exit 1
   fi
-  if [ ! -d "$source_dir" ]; then
-    echo "Source stage directory does not exist: $source_dir" >&2
-    exit 1
-  fi
-elif [ "$1" = "--from-gcs" ]; then
-  mode="from-gcs"
-  if [ "$#" -lt 3 ]; then
-    usage
-    exit 1
-  fi
-  shift
-  args=("$@")
-  target_dir="${args[$(( ${#args[@]} - 1 ))]}"
-  gcs_uris=("${args[@]:0:$(( ${#args[@]} - 1 ))}")
-  if [ ! -d "$target_dir" ] || [ ! -f "$target_dir/variables.tf" ]; then
-    echo "Target stage must be a directory containing variables.tf: $target_dir" >&2
-    exit 1
-  fi
-  for uri in "${gcs_uris[@]}"; do
-    if [[ ! "$uri" =~ ^gs://[^/]+/.+ ]]; then
-      echo "Invalid GCS URI: $uri" >&2
-      exit 1
-    fi
-  done
-else
-  args=("$@")
-  target_dir="${args[$(( ${#args[@]} - 1 ))]}"
-  source_dirs=("${args[@]:0:$(( ${#args[@]} - 1 ))}")
-  if [ ! -d "$target_dir" ] || [ ! -f "$target_dir/variables.tf" ]; then
-    echo "Target stage must be a directory containing variables.tf: $target_dir" >&2
-    exit 1
-  fi
-  for src in "${source_dirs[@]}"; do
+  source_abs_dirs=()
+  for src in "${positional[@]}"; do
     if [ ! -d "$src" ]; then
       echo "Source stage directory does not exist: $src" >&2
       exit 1
     fi
+    source_abs_dirs+=("$(cd "$src" && pwd)")
   done
-fi
 
-if [ "$mode" = "export-gcs" ]; then
-  source_abs="$(cd "$source_dir" && pwd)"
-  python3 - "$gcs_uri" "$source_abs" <<'PY'
+  python3 - "$gcs_export_uri" "$env_name" "${source_abs_dirs[@]}" <<'PY'
 import json
 import os
 from pathlib import Path
@@ -79,22 +80,27 @@ import sys
 import tempfile
 
 gcs_uri = sys.argv[1]
-source_dir = Path(sys.argv[2])
+env_name = sys.argv[2]
+source_dirs = [Path(p) for p in sys.argv[3:]]
 
-raw = subprocess.check_output(
-    ["terraform", f"-chdir={source_dir}", "output", "-json"],
-    text=True,
-)
-outputs = json.loads(raw)
 exported: dict[str, object] = {}
-for key, payload in outputs.items():
-    if not isinstance(payload, dict):
-        continue
-    if payload.get("sensitive") is True:
-        continue
-    val = payload.get("value")
-    if val is not None:
-        exported[key] = val
+for source_dir in source_dirs:
+    raw = subprocess.check_output(
+        ["terraform", f"-chdir={source_dir}", "output", "-json"],
+        text=True,
+    )
+    outputs = json.loads(raw)
+    for key, payload in outputs.items():
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("sensitive") is True:
+            continue
+        val = payload.get("value")
+        if val is not None:
+            exported[key] = val
+
+if env_name:
+    exported["environment"] = env_name
 
 fd, tmp_name = tempfile.mkstemp(prefix="iac-outputs-", suffix=".json")
 tmp_path = Path(tmp_name)
@@ -111,21 +117,45 @@ finally:
     if tmp_path.exists():
         tmp_path.unlink()
 
-print(f"Exported {len(exported)} non-sensitive output(s) to {gcs_uri}")
+print(f"Exported {len(exported)} non-sensitive output(s) from {len(source_dirs)} stage(s) to {gcs_uri}")
 PY
   exit 0
+fi
+
+if [ "${#positional[@]}" -lt 2 ]; then
+  usage
+  exit 1
+fi
+
+last_idx=$(( ${#positional[@]} - 1 ))
+target_dir="${positional[$last_idx]}"
+inputs=("${positional[@]:0:$last_idx}")
+
+if [ ! -d "$target_dir" ] || [ ! -f "$target_dir/variables.tf" ]; then
+  echo "Target stage must be a directory containing variables.tf: $target_dir" >&2
+  exit 1
+fi
+
+if [ "$mode" = "from-gcs" ]; then
+  for uri in "${inputs[@]}"; do
+    if [[ ! "$uri" =~ ^gs://[^/]+/.+ ]]; then
+      echo "Invalid GCS URI: $uri" >&2
+      exit 1
+    fi
+  done
+else
+  for src in "${inputs[@]}"; do
+    if [ ! -d "$src" ]; then
+      echo "Source stage directory does not exist: $src" >&2
+      exit 1
+    fi
+  done
 fi
 
 target_abs="$(cd "$target_dir" && pwd)"
 out_file="$target_abs/00_linked.auto.tfvars.json"
 
-if [ "$mode" = "from-gcs" ]; then
-  inputs=("${gcs_uris[@]}")
-else
-  inputs=("${source_dirs[@]}")
-fi
-
-python3 - "$mode" "$target_abs" "$out_file" "${inputs[@]}" <<'PY'
+python3 - "$mode" "$target_abs" "$out_file" "$env_name" "${inputs[@]}" <<'PY'
 import json
 import os
 from pathlib import Path
@@ -136,7 +166,8 @@ import sys
 mode = sys.argv[1]
 target_dir = Path(sys.argv[2])
 out_file = Path(sys.argv[3])
-sources = sys.argv[4:]
+env_name = sys.argv[4]
+sources = sys.argv[5:]
 
 var_re = re.compile(r'^\s*variable\s+"([A-Za-z0-9_]+)"\s*\{', re.MULTILINE)
 declared_vars = set(var_re.findall((target_dir / "variables.tf").read_text(encoding="utf-8")))
@@ -172,6 +203,9 @@ else:
             val = payload.get("value")
             if val is not None:
                 merged[key] = val
+
+if env_name and "environment" in declared_vars:
+    merged["environment"] = env_name
 
 tmp_file = out_file.with_name(f".{out_file.name}.{os.getpid()}.tmp")
 fd = os.open(tmp_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)

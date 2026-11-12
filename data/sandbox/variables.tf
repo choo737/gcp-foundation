@@ -20,6 +20,12 @@ variable "prefix" {
   }
 }
 
+variable "environment" {
+  type        = string
+  default     = "sandbox"
+  description = "Environment label passed to Dataform release and workflow configs."
+}
+
 variable "medallion_git_url" {
   type        = string
   default     = "https://github.com/choo737/gcp-data-medallion.git"
@@ -35,7 +41,7 @@ variable "medallion_git_branch" {
 variable "git_release_commitish" {
   type        = string
   default     = "main"
-  description = "Git branch, tag, or commit SHA compiled by the prod-main release config."
+  description = "Git branch, tag, or commit SHA compiled by the Dataform release config."
 }
 
 variable "git_token_secret_version" {
@@ -52,7 +58,19 @@ variable "git_token_secret_version" {
 variable "kms_key_name" {
   type        = string
   default     = ""
-  description = "Optional Cloud KMS key ID for BigQuery and Dataform encryption."
+  description = "Optional Cloud KMS key ID for BigQuery, Artifact Registry, GCS, and Dataform encryption."
+}
+
+variable "immutable_image_tags" {
+  type        = bool
+  default     = false
+  description = "Whether Artifact Registry enforces immutable Docker image tags."
+}
+
+variable "batch_loader_sa_email" {
+  type        = string
+  default     = ""
+  description = "Optional Cloud Run batch loader service account granted Artifact Registry reader."
 }
 
 variable "masking_expression" {
@@ -76,13 +94,43 @@ variable "fine_grained_readers" {
 variable "delete_contents_on_destroy" {
   type        = bool
   default     = false
-  description = "Whether destroy drops tables and dataset contents in the sandbox."
+  description = "Whether destroy drops tables, landing objects, and dataset contents in the sandbox."
+}
+
+variable "ephemeral_table_expiration_ms" {
+  type        = number
+  default     = 7776000000
+  description = "Default table expiration in ms for quarantine and assertion datasets (90 days)."
+}
+
+variable "ephemeral_partition_expiration_ms" {
+  type        = number
+  default     = 7776000000
+  description = "Default partition expiration in ms for quarantine and assertion datasets (90 days)."
 }
 
 variable "enable_scheduled_workflow" {
   type        = bool
   default     = false
   description = "Whether to enable a daily Dataform workflow schedule in the sandbox."
+}
+
+variable "enable_quality_scan" {
+  type        = bool
+  default     = true
+  description = "Whether to provision the Dataplex data quality scan on silver.fct_orders."
+}
+
+variable "quality_target_table_id" {
+  type        = string
+  default     = "fct_orders"
+  description = "BigQuery table ID in silver_curated targeted by the Dataplex data quality scan."
+}
+
+variable "quality_results_table" {
+  type        = string
+  default     = ""
+  description = "Optional full BigQuery resource URI for Dataplex quality results export."
 }
 
 variable "propagation_wait_seconds" {

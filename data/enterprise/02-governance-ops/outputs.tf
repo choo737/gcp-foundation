@@ -8,6 +8,11 @@ output "dataform_release_config_name" {
   description = "Dataform release configuration name."
 }
 
+output "dataform_workflow_config_name" {
+  value       = module.dataform_repository.workflow_config_name
+  description = "Dataform workflow configuration name, or empty string when disabled."
+}
+
 output "dataform_service_account_email" {
   value       = module.dataform_repository.service_account_email
   description = "Dedicated Dataform ETL service account email."
@@ -26,6 +31,16 @@ output "dataplex_service_agent_email" {
 output "dataplex_scan_names" {
   value       = module.dataplex_scans.scan_names
   description = "Map of Dataplex data profile scan resource names."
+}
+
+output "quality_scan_id" {
+  value       = module.dataplex_scans.quality_scan_id
+  description = "Dataplex data quality scan ID for Silver orders."
+}
+
+output "dataplex_quality_scan_id" {
+  value       = module.dataplex_scans.dataplex_quality_scan_id
+  description = "Alias of quality_scan_id for downstream orchestration stages."
 }
 
 output "ops_telemetry_dataset_id" {

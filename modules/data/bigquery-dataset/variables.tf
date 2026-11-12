@@ -25,6 +25,29 @@ variable "description" {
   description = "Dataset description."
 }
 
+variable "max_time_travel_hours" {
+  type        = number
+  default     = 168
+  description = "Time travel retention window in hours (48 to 168)."
+
+  validation {
+    condition     = var.max_time_travel_hours >= 48 && var.max_time_travel_hours <= 168
+    error_message = "max_time_travel_hours must be between 48 and 168."
+  }
+}
+
+variable "default_partition_expiration_ms" {
+  type        = number
+  default     = null
+  description = "Optional default expiration in milliseconds for partitioned tables."
+}
+
+variable "default_table_expiration_ms" {
+  type        = number
+  default     = null
+  description = "Optional default expiration in milliseconds for tables in this dataset."
+}
+
 variable "delete_contents_on_destroy" {
   type        = bool
   default     = false

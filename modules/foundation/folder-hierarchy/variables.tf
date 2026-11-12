@@ -36,3 +36,14 @@ variable "workload_folders" {
   default     = ["data-platform"]
   description = "Workload pillar folder names created under 02-workloads."
 }
+
+variable "environments" {
+  type        = list(string)
+  default     = ["dev", "staging", "prod"]
+  description = "Environment folder names created under 02-environments."
+
+  validation {
+    condition     = length(var.environments) > 0 && alltrue([for e in var.environments : can(regex("^[a-z0-9-]+$", e))])
+    error_message = "environments must be non-empty lowercase alphanumeric/hyphen names."
+  }
+}

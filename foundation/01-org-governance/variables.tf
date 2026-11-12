@@ -36,6 +36,18 @@ variable "region" {
   description = "Default GCP region passed downstream."
 }
 
+variable "dr_region" {
+  type        = string
+  default     = null
+  description = "Optional disaster recovery GCP region added to allowed_resource_locations."
+}
+
+variable "environments" {
+  type        = list(string)
+  default     = ["dev", "staging", "prod"]
+  description = "Environment folder names provisioned under 02-environments."
+}
+
 variable "deletion_protection" {
   type        = bool
   default     = true
@@ -104,8 +116,20 @@ variable "retention_days" {
 
 variable "lock_audit_bucket" {
   type        = bool
-  default     = false
+  default     = true
   description = "Whether to lock the central Cloud Logging audit bucket."
+}
+
+variable "enable_audit_project_lien" {
+  type        = bool
+  default     = true
+  description = "Whether to attach a Resource Manager deletion lien to the audit project."
+}
+
+variable "enable_finops_tag_bindings" {
+  type        = bool
+  default     = true
+  description = "Whether to bind FinOps cost-allocation tags onto the audit project."
 }
 
 variable "enable_log_analytics" {

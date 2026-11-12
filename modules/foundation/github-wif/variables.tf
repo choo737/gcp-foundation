@@ -35,6 +35,28 @@ variable "github_repositories" {
   }
 }
 
+variable "allowed_refs" {
+  type        = list(string)
+  default     = []
+  description = "Optional Git refs or wildcard prefixes (for example refs/heads/main, refs/tags/*) enforced in CEL."
+
+  validation {
+    condition     = alltrue([for r in var.allowed_refs : can(regex("^[A-Za-z0-9._/*-]+$", r))])
+    error_message = "Each allowed_refs entry must match ^[A-Za-z0-9._/*-]+$."
+  }
+}
+
+variable "allowed_environments" {
+  type        = list(string)
+  default     = []
+  description = "Optional GitHub Environments (for example dev, staging, prod) enforced in CEL."
+
+  validation {
+    condition     = alltrue([for e in var.allowed_environments : can(regex("^[a-z0-9-]+$", e))])
+    error_message = "Each allowed_environments entry must match ^[a-z0-9-]+$."
+  }
+}
+
 variable "service_account_bindings" {
   type = map(object({
     service_account_id = string

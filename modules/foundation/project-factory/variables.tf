@@ -59,6 +59,12 @@ variable "project_iam_bindings" {
   description = "Non-authoritative IAM member bindings applied at project scope."
 }
 
+variable "tag_bindings" {
+  type        = map(string)
+  default     = {}
+  description = "Optional map of tag keys to Resource Manager tagValues/<id> bound to this project."
+}
+
 variable "labels" {
   type        = map(string)
   default     = {}

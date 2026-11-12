@@ -13,9 +13,27 @@ variable "prefix" {
   description = "Name prefix used when creating the default ETL service account."
 }
 
+variable "environment" {
+  type        = string
+  default     = "dev"
+  description = "Environment name used for default Dataform release and workflow config names."
+}
+
 variable "repository_name" {
   type        = string
   description = "Dataform repository ID."
+}
+
+variable "release_config_name" {
+  type        = string
+  default     = null
+  description = "Optional release configuration name, defaulting to <environment>-main."
+}
+
+variable "workflow_config_name" {
+  type        = string
+  default     = null
+  description = "Optional workflow configuration name, defaulting to <environment>-daily."
 }
 
 variable "display_name" {
@@ -51,7 +69,7 @@ variable "git_default_branch" {
 variable "git_release_commitish" {
   type        = string
   default     = "main"
-  description = "Git branch, tag, or commit SHA compiled by the prod-main release config."
+  description = "Git branch, tag, or commit SHA compiled by the release config."
 }
 
 variable "kms_key_name" {
@@ -120,10 +138,22 @@ variable "pii_policy_tag" {
   description = "Data Catalog policy tag ID passed as pii_policy_tag."
 }
 
+variable "pii_masked_policy_tag" {
+  type        = string
+  default     = ""
+  description = "Data Catalog masked PII policy tag ID passed as pii_masked_policy_tag."
+}
+
+variable "pii_restricted_policy_tag" {
+  type        = string
+  default     = ""
+  description = "Data Catalog restricted PII policy tag ID passed as pii_restricted_policy_tag."
+}
+
 variable "release_cron_schedule" {
   type        = string
   default     = null
-  description = "Optional cron schedule for automatic release compilation."
+  description = "Optional cron schedule for automatic release compilation (defaults to 45 1 * * * when scheduled workflow is enabled)."
 }
 
 variable "enable_scheduled_workflow" {

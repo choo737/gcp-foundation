@@ -1,14 +1,14 @@
 # Network Security Module
 
-This module provisions regional CMEK keys and optional VPC, PSC, DNS, and VPC-SC controls.
+This module provisions regional CMEK keys, Shared VPC, PSC, firewall, and VPC-SC controls.
 
 ## Resources Managed
 
-- Regional `google_kms_key_ring` and `google_kms_crypto_key` with 90-day rotation and 30-day schedule.
-- Optional custom VPC, private subnet with VPC Flow Logs, and Cloud DNS query logging.
+- Primary and optional DR `google_kms_key_ring` and `google_kms_crypto_key` resources.
+- Optional Shared VPC host, private subnet with Flow Logs, and Datastream PSC attachment.
 - Optional PSC endpoint with private DNS zones for `googleapis.com.`, `pkg.dev.`, and `gcr.io.`.
-- Network firewall policy allowing TCP 443 to PSC with a priority 65530 deny-all egress rule.
-- Optional `google_access_context_manager_service_perimeter` supporting dry-run or enforced mode.
+- Network firewall policy allowing PSC TCP 443, optional DB ports, and default deny-all egress.
+- Optional environment-scoped `google_access_context_manager_service_perimeter` and access level.
 
 ## Usage
 
@@ -19,6 +19,7 @@ module "network_security" {
   project_id  = module.network_project.project_id
   region      = var.region
   prefix      = "ent"
+  environment = "dev"
   enable_cmek = true
   enable_vpc  = false
 }

@@ -35,3 +35,10 @@ resource "google_project_iam_member" "this" {
   role    = each.value.role
   member  = each.value.member
 }
+
+resource "google_tags_tag_binding" "this" {
+  for_each = var.tag_bindings
+
+  parent    = "//cloudresourcemanager.googleapis.com/projects/${google_project.this.number}"
+  tag_value = each.value
+}

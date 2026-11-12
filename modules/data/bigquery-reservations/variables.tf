@@ -13,6 +13,12 @@ variable "prefix" {
   description = "Name prefix for created BigQuery reservations."
 }
 
+variable "bi_project_id" {
+  type        = string
+  default     = ""
+  description = "Optional BI compute project ID automatically assigned to the adhoc reservation."
+}
+
 variable "reservations" {
   type = map(object({
     edition           = optional(string, "ENTERPRISE")

@@ -31,6 +31,12 @@ variable "project_suffix" {
   }
 }
 
+variable "enable_ci_service_accounts" {
+  type        = bool
+  default     = true
+  description = "Whether to provision dedicated tf-foundation-ci, tf-ingestion-ci, and dataform-ci service accounts."
+}
+
 variable "enable_github_wif" {
   type        = bool
   default     = false
@@ -57,6 +63,18 @@ variable "github_repositories" {
     condition     = alltrue([for r in var.github_repositories : can(regex("^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$", r))])
     error_message = "Each github_repositories entry must match owner/repo using safe characters only."
   }
+}
+
+variable "allowed_refs" {
+  type        = list(string)
+  default     = []
+  description = "Optional Git refs or wildcard prefixes (for example refs/heads/main, refs/tags/*) enforced in WIF CEL."
+}
+
+variable "allowed_environments" {
+  type        = list(string)
+  default     = []
+  description = "Optional GitHub Environments (dev, staging, prod) enforced in WIF CEL."
 }
 
 variable "service_account_bindings" {

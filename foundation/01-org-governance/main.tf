@@ -1,6 +1,11 @@
 locals {
-  project_prefix   = var.project_suffix != "" ? "${var.prefix}-${var.project_suffix}" : var.prefix
-  audit_project_id = "${local.project_prefix}-audit"
+  project_prefix    = var.project_suffix != "" ? "${var.prefix}-${var.project_suffix}" : var.prefix
+  audit_project_id  = "${local.project_prefix}-audit"
+  trimmed_dr_region = var.dr_region != null ? trimspace(var.dr_region) : ""
+  allowed_resource_locations = concat(
+    ["in:${var.region}-locations"],
+    local.trimmed_dr_region != "" ? ["in:${local.trimmed_dr_region}-locations"] : [],
+  )
 }
 
 provider "google" {
@@ -24,6 +29,7 @@ module "folder_hierarchy" {
   create_root_folder  = true
   deletion_protection = var.deletion_protection
   workload_folders    = ["data-platform"]
+  environments        = var.environments
 }
 
 module "audit_project" {
@@ -56,6 +62,18 @@ resource "time_sleep" "audit_api_propagation" {
   depends_on = [module.audit_project]
 }
 
+resource "google_resource_manager_lien" "audit_project" {
+  count    = var.enable_audit_project_lien ? 1 : 0
+  provider = google.billing_quota
+
+  parent       = "projects/${module.audit_project.project_number}"
+  restrictions = ["resourcemanager.projects.delete"]
+  origin       = "${var.prefix}-org-governance"
+  reason       = "Locked compliance audit log bucket protection"
+
+  depends_on = [time_sleep.audit_api_propagation]
+}
+
 module "logging_guardrails" {
   source = "../../modules/foundation/logging-guardrails"
 
@@ -80,7 +98,7 @@ module "logging_guardrails" {
   foundation_iam_groups             = var.foundation_iam_groups
   enable_data_access_audit_logs     = var.enable_data_access_audit_logs
   enable_org_policies               = var.enable_org_policies
-  allowed_resource_locations        = ["in:${var.region}-locations"]
+  allowed_resource_locations        = local.allowed_resource_locations
   allowed_policy_member_domains     = var.allowed_policy_member_domains
   allowed_contact_domains           = var.allowed_contact_domains
   denied_storage_auth_types         = var.denied_storage_auth_types
@@ -111,4 +129,12 @@ module "finops_governance" {
   labels                     = var.labels
 
   depends_on = [time_sleep.audit_api_propagation]
+}
+
+resource "google_tags_tag_binding" "audit_finops" {
+  for_each = var.enable_finops_tag_bindings ? toset(["cost_center.shared", "environment.prod"]) : toset([])
+  provider = google.billing_quota
+
+  parent    = "//cloudresourcemanager.googleapis.com/projects/${module.audit_project.project_number}"
+  tag_value = module.finops_governance.finops_tag_value_ids[each.value]
 }

@@ -21,6 +21,27 @@ ROOT_FILES = frozenset({
     "outputs.tf",
     "versions.tf",
     "terraform.tfvars.example",
+    ".terraform.lock.hcl",
+})
+
+MULTI_ENV_ROOTS = frozenset({
+    "foundation/02-security-network",
+    "data/enterprise/01-platform",
+    "data/enterprise/02-governance-ops",
+})
+
+EXPECTED_ENV_FILES = frozenset({
+    "dev.tfvars.example",
+    "staging.tfvars.example",
+    "prod.tfvars.example",
+})
+
+POST_BOOTSTRAP_ROOTS = frozenset({
+    "foundation/01-org-governance",
+    "foundation/02-security-network",
+    "data/sandbox",
+    "data/enterprise/01-platform",
+    "data/enterprise/02-governance-ops",
 })
 
 EXPECTED_MODULES = frozenset({
@@ -30,6 +51,7 @@ EXPECTED_MODULES = frozenset({
     "modules/foundation/finops-governance",
     "modules/foundation/network-security",
     "modules/foundation/github-wif",
+    "modules/foundation/monitoring-alerts",
     "modules/data/governance-catalog",
     "modules/data/bigquery-dataset",
     "modules/data/bigquery-reservations",
@@ -48,7 +70,6 @@ EXPECTED_ROOTS = frozenset({
 
 IGNORED_NAMES = frozenset({
     ".terraform",
-    ".terraform.lock.hcl",
     "__pycache__",
     ".DS_Store",
     "terraform.tfstate",
@@ -111,7 +132,7 @@ def _discover_runnable_roots() -> list[Path]:
 
 
 class RepoSymmetryTest(unittest.TestCase):
-    """Validate 11 five-file modules, 6 six-file roots, and version pins."""
+    """Validate 12 five-file modules, 6 runnable roots, lockfiles, and version pins."""
 
     def test_modules_obey_five_file_contract(self) -> None:
         modules = _discover_modules()
@@ -133,25 +154,34 @@ class RepoSymmetryTest(unittest.TestCase):
                             f"Expected file, found non-file: {entry}",
                         )
 
-    def test_runnable_roots_obey_six_file_contract(self) -> None:
+    def test_runnable_roots_obey_root_and_env_contract(self) -> None:
         roots = _discover_runnable_roots()
         discovered_rel = {str(r.relative_to(REPO_ROOT)) for r in roots}
         self.assertEqual(discovered_rel, EXPECTED_ROOTS)
 
         for root_dir in roots:
-            with self.subTest(root=str(root_dir.relative_to(REPO_ROOT))):
+            rel = str(root_dir.relative_to(REPO_ROOT))
+            expected_entries = set(ROOT_FILES)
+            if rel in MULTI_ENV_ROOTS:
+                expected_entries.add("envs")
+
+            with self.subTest(root=rel):
                 actual = _visible_entries(root_dir)
                 self.assertEqual(
                     actual,
-                    ROOT_FILES,
-                    f"{root_dir} must contain exact 6-file contract: {sorted(ROOT_FILES)}",
+                    expected_entries,
+                    f"{root_dir} must contain exact contract: {sorted(expected_entries)}",
                 )
-                for entry in root_dir.iterdir():
-                    if entry.name in ROOT_FILES:
-                        self.assertTrue(
-                            entry.is_file(),
-                            f"Expected file, found non-file: {entry}",
-                        )
+                for fname in ROOT_FILES:
+                    fpath = root_dir / fname
+                    self.assertTrue(
+                        fpath.is_file(),
+                        f"Expected file, found non-file: {fpath}",
+                    )
+                if rel in MULTI_ENV_ROOTS:
+                    envs_dir = root_dir / "envs"
+                    self.assertTrue(envs_dir.is_dir())
+                    self.assertEqual(_visible_entries(envs_dir), EXPECTED_ENV_FILES)
 
     def test_versions_tf_pins_terraform_and_google_provider(self) -> None:
         targets = _discover_modules() + _discover_runnable_roots()
@@ -162,10 +192,15 @@ class RepoSymmetryTest(unittest.TestCase):
         )
         for target in targets:
             versions_path = target / "versions.tf"
+            rel = str(target.relative_to(REPO_ROOT))
             with self.subTest(versions=str(versions_path.relative_to(REPO_ROOT))):
                 text = versions_path.read_text(encoding="utf-8")
                 self.assertRegex(text, tf_pattern)
                 self.assertRegex(text, google_pattern)
+                if rel in POST_BOOTSTRAP_ROOTS:
+                    self.assertIn('backend "gcs" {}', text)
+                elif rel == "foundation/00-bootstrap":
+                    self.assertNotIn('backend "gcs"', text)
 
 
 if __name__ == "__main__":

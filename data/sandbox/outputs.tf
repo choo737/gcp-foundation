@@ -18,6 +18,16 @@ output "project_number" {
   description = "Numeric GCP project number for the sandbox project."
 }
 
+output "landing_bucket_name" {
+  value       = google_storage_bucket.landing.name
+  description = "Sandbox raw ingestion landing Cloud Storage bucket name."
+}
+
+output "artifact_registry_repository_uri" {
+  value       = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.ingestion.repository_id}"
+  description = "Docker Artifact Registry URI for sandbox ingestion containers."
+}
+
 output "dataset_ids" {
   value       = { for k, m in module.datasets : k => m.dataset_id }
   description = "Map of Medallion layer keys to created BigQuery dataset IDs."
@@ -26,6 +36,16 @@ output "dataset_ids" {
 output "bronze_dataset_id" {
   value       = module.datasets["bronze_raw"].dataset_id
   description = "Sandbox Bronze BigQuery dataset ID."
+}
+
+output "silver_dataset_id" {
+  value       = module.datasets["silver_curated"].dataset_id
+  description = "Sandbox Silver BigQuery dataset ID."
+}
+
+output "quarantine_dataset_id" {
+  value       = module.datasets["quarantine"].dataset_id
+  description = "Sandbox quarantine BigQuery dataset ID."
 }
 
 output "ops_telemetry_dataset_id" {
@@ -63,6 +83,16 @@ output "dataplex_scan_names" {
   description = "Map of Dataplex data profile scan resource names."
 }
 
+output "quality_scan_id" {
+  value       = module.dataplex_scans.quality_scan_id
+  description = "Dataplex data quality scan ID for Silver orders."
+}
+
+output "dataplex_quality_scan_id" {
+  value       = module.dataplex_scans.dataplex_quality_scan_id
+  description = "Alias of quality_scan_id for downstream orchestration stages."
+}
+
 output "dataform_repository_name" {
   value       = module.dataform_repository.repository_name
   description = "Dataform repository short name."
@@ -71,6 +101,11 @@ output "dataform_repository_name" {
 output "dataform_release_config_name" {
   value       = module.dataform_repository.release_config_name
   description = "Dataform release configuration name."
+}
+
+output "dataform_workflow_config_name" {
+  value       = module.dataform_repository.workflow_config_name
+  description = "Dataform workflow configuration name."
 }
 
 output "dataform_service_account_email" {

@@ -12,6 +12,38 @@ locals {
     "iam.googleapis.com",
     "storage.googleapis.com",
   ])
+
+  ci_service_accounts = {
+    tf_foundation_ci = {
+      account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-tf-foundation-ci"), 0, 30), "-")
+      display_name = "${var.prefix} Foundation CI"
+      description  = "Service account for GitHub Actions gcp-foundation Terraform runs."
+    }
+    tf_ingestion_ci = {
+      account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-tf-ingestion-ci"), 0, 30), "-")
+      display_name = "${var.prefix} Ingestion CI"
+      description  = "Service account for GitHub Actions gcp-data-ingestion Terraform runs."
+    }
+    dataform_ci = {
+      account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-dataform-ci"), 0, 30), "-")
+      display_name = "${var.prefix} Dataform CI"
+      description  = "Service account for GitHub Actions Dataform compilation checks."
+    }
+  }
+
+  default_ci_bindings = (
+    var.enable_ci_service_accounts && length(var.github_repositories) > 0
+    ? {
+      for k, sa in google_service_account.ci :
+      k => {
+        service_account_id = sa.name
+        repositories       = var.github_repositories
+      }
+    }
+    : {}
+  )
+
+  effective_sa_bindings = merge(local.default_ci_bindings, var.service_account_bindings)
 }
 
 resource "google_project_service" "bootstrap_apis" {
@@ -42,6 +74,16 @@ resource "google_storage_bucket" "tfstate" {
     enabled = true
   }
 
+  lifecycle_rule {
+    condition {
+      days_since_noncurrent_time = 90
+      num_newer_versions         = 10
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
   depends_on = [time_sleep.api_propagation]
 }
 
@@ -58,6 +100,27 @@ resource "google_storage_bucket" "iac_outputs" {
     enabled = true
   }
 
+  lifecycle_rule {
+    condition {
+      days_since_noncurrent_time = 90
+      num_newer_versions         = 10
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
+  depends_on = [time_sleep.api_propagation]
+}
+
+resource "google_service_account" "ci" {
+  for_each = var.enable_ci_service_accounts ? local.ci_service_accounts : {}
+
+  project      = var.project_id
+  account_id   = each.value.account_id
+  display_name = each.value.display_name
+  description  = each.value.description
+
   depends_on = [time_sleep.api_propagation]
 }
 
@@ -69,7 +132,9 @@ module "github_wif" {
   prefix                   = var.prefix
   github_org               = var.github_org
   github_repositories      = var.github_repositories
-  service_account_bindings = var.service_account_bindings
+  allowed_refs             = var.allowed_refs
+  allowed_environments     = var.allowed_environments
+  service_account_bindings = local.effective_sa_bindings
 
   depends_on = [time_sleep.api_propagation]
 }

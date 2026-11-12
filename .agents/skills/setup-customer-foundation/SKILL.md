@@ -48,29 +48,29 @@ Ask the customer to select an adoption path first:
 3. **Path 2 (Brownfield Data Platform)**: `data/enterprise/01-platform` -> `data/enterprise/02-governance-ops` under an existing folder.
 4. **Path 3 (Single-Project Sandbox)**: `data/sandbox/` inside one existing GCP project.
 
-Collect the required variables before creating `custom.auto.tfvars`:
+Collect the required variables before creating `custom.auto.tfvars` or `envs/<env>.tfvars`:
 
 - **Path 0**: `project_id`, `region`, `prefix`, `project_suffix`, `enable_github_wif`, `github_org`, `github_repositories`.
-- **Path 1**: `parent_id`, `billing_account`, `region`, `prefix`, `project_suffix`, `enable_org_policies`, `allowed_policy_member_domains`, `allowed_contact_domains`, `enable_billing_budget`, `monthly_budget_amount`, `budget_currency_code`, `enable_reservations`, `masked_readers`, `bi_analysts`.
-- **Path 2**: `data_folder_id`, `billing_account`, `region`, `prefix`, `project_suffix`, optional `kms_key_id`, `enable_reservations`, `masked_readers`, `bi_analysts`.
+- **Path 1**: `parent_id`, `billing_account`, `region`, `prefix`, `project_suffix`, `environments`, `enable_org_policies`, `allowed_policy_member_domains`, `allowed_contact_domains`, `enable_billing_budget`, `monthly_budget_amount`, `budget_currency_code`, `enable_reservations`, `masked_readers`, `bi_analysts`.
+- **Path 2**: `data_folder_id`, `billing_account`, `region`, `prefix`, `project_suffix`, `environment`, optional `kms_key_id`, `enable_reservations`, `masked_readers`, `bi_analysts`.
 - **Path 3**: `project_id`, `region`, `prefix`, `masked_readers`.
-- Keep `prefix` to 3-6 lowercase alphanumeric chars and set `project_suffix` (for example `dev01`) to avoid 30-day soft-delete collisions.
+- Keep `prefix` to 3-6 lowercase alphanumeric chars and set `project_suffix` (`dev01`, `stg01`, `prd01`).
 - Offer optional `gcloud` lookup commands (`gcloud organizations list`, `gcloud billing accounts list`) only if asked.
-- If `enable_org_policies = true`, collect `allowed_policy_member_domains` (Workspace Customer ID via `gcloud organizations list`) and `allowed_contact_domains`.
+- If `enable_org_policies = true`, collect `allowed_policy_member_domains` and `allowed_contact_domains`.
 
 Ask whether this is a **production** or **ephemeral test** deployment:
 
 - **Production**: `deletion_protection = true`, `project_deletion_policy = "PREVENT"`, `delete_contents_on_destroy = false`.
 - **Ephemeral test**: `deletion_protection = false`, `project_deletion_policy = "DELETE"`, `delete_contents_on_destroy = true`.
 
-Map customer inputs to each stage's `custom.auto.tfvars`:
+Map customer inputs to each stage's `custom.auto.tfvars` or `envs/<env>.tfvars`:
 
-- `foundation/00-bootstrap/custom.auto.tfvars`: `project_id`, `region`, `prefix`, `project_suffix`, `enable_github_wif`, `github_org`, `github_repositories`, `force_destroy`.
-- `foundation/01-org-governance/custom.auto.tfvars`: `parent_id`, `billing_account`, `region`, `prefix`, `project_suffix`, `enable_org_policies`, `allowed_policy_member_domains`, `allowed_contact_domains`, `enable_log_analytics`, `enable_siem_pubsub_sink`, `enable_scc_notifications`, `essential_contacts`, `foundation_iam_groups`, `enable_billing_budget`, `monthly_budget_amount`, `budget_currency_code`, lifecycle flags.
-- `foundation/02-security-network/custom.auto.tfvars`: optional `enable_cmek`, `enable_vpc`, `enable_vpc_flow_logs`, `enable_dns_logging`, `enable_psc`, `enable_vpc_sc`, `enforce_vpc_sc`, `project_deletion_policy`.
-- `data/enterprise/01-platform/custom.auto.tfvars`: `domain_marts`, `primary_domain`, `enable_reservations`, `masked_readers`, `bi_analysts` (plus `data_folder_id`, `billing_account`, `prefix`, `project_suffix` for Path 2).
-- `data/enterprise/02-governance-ops/custom.auto.tfvars`: `medallion_git_url`, `git_token_secret_version` (optional), `enable_scheduled_workflow`, `delete_contents_on_destroy`.
-- `data/sandbox/custom.auto.tfvars`: `project_id`, `region`, `prefix`, `git_token_secret_version` (optional), `masked_readers`, `delete_contents_on_destroy`.
+- `foundation/00-bootstrap/custom.auto.tfvars`: `project_id`, `region`, `prefix`, `project_suffix`, `enable_github_wif`, `github_org`, `github_repositories`, `allowed_refs`, `allowed_environments`, `force_destroy`.
+- `foundation/01-org-governance/custom.auto.tfvars`: `parent_id`, `billing_account`, `region`, `dr_region`, `prefix`, `project_suffix`, `environments`, `enable_org_policies`, `allowed_policy_member_domains`, `allowed_contact_domains`, `lock_audit_bucket`, `enable_audit_project_lien`, `enable_billing_budget`, `monthly_budget_amount`, `budget_currency_code`, lifecycle flags.
+- `foundation/02-security-network/envs/<env>.tfvars`: `environment`, `enable_cmek`, `enable_vpc`, `enable_shared_vpc_host`, `enable_psc`, `enable_vpc_sc`, `enforce_vpc_sc`, `enable_alerts`, `project_deletion_policy`.
+- `data/enterprise/01-platform/envs/<env>.tfvars`: `environment`, `domain_marts`, `primary_domain`, `enable_reservations`, `masked_readers`, `bi_analysts`, `bi_analysts_group`, `data_engineers_group`, `governance_stewards_group`.
+- `data/enterprise/02-governance-ops/envs/<env>.tfvars`: `environment`, `medallion_git_url`, `git_token_secret_version`, `enable_scheduled_workflow`, `enable_quality_scan`, `delete_contents_on_destroy`.
+- `data/sandbox/custom.auto.tfvars`: `project_id`, `region`, `prefix`, `git_token_secret_version`, `masked_readers`, `delete_contents_on_destroy`.
 
 ## Step 2: Verify Credentials, Git Secret, and Untracked Vars
 
@@ -99,7 +99,8 @@ Use `printf '%s'` to strip trailing newlines; never pipe `gh auth token` directl
 gcloud services enable secretmanager.googleapis.com --project="${TARGET_PROJECT}"
 printf '%s' "${GITHUB_PAT}" | gcloud secrets create "${PREFIX}-git-pat" \
   --project="${TARGET_PROJECT}" \
-  --replication-policy="automatic" \
+  --replication-policy="user-managed" \
+  --locations="${REGION}" \
   --data-file=-
 ```
 
@@ -107,52 +108,43 @@ Pass `projects/${TARGET_PROJECT}/secrets/${PREFIX}-git-pat/versions/1` as `git_t
 In Path 1 Enterprise, set `TARGET_PROJECT` to `<prefix>-<suffix>-data-etl` right after `data/enterprise/01-platform` finishes.
 Destroying `data/enterprise/01-platform` removes `<prefix>-<suffix>-data-etl` and that secret automatically.
 
-Write customer inputs only into gitignored `custom.auto.tfvars` files.
+Write customer inputs only into gitignored `custom.auto.tfvars` or `envs/<env>.tfvars` files.
 Never commit customer IDs into tracked files.
 
 ## Step 3: Execute Stages, Link Outputs, and Tear Down Safely
 
-Run Path 1 forward in exact order (`00_linked.auto.tfvars.json` loads before `custom.auto.tfvars`):
+Run Path 1 forward per environment (`00_linked.auto.tfvars.json` loads before `custom.auto.tfvars`):
 
 ```bash
-terraform -chdir=foundation/01-org-governance init
-terraform -chdir=foundation/01-org-governance plan
-terraform -chdir=foundation/01-org-governance apply
+export TFSTATE_BUCKET="<prefix>-<suffix>-tfstate"
+export ENV="dev"
 
-./scripts/link-stages.sh foundation/01-org-governance foundation/02-security-network
-terraform -chdir=foundation/02-security-network init
-terraform -chdir=foundation/02-security-network plan
-terraform -chdir=foundation/02-security-network apply
+make apply STAGE="foundation/01-org-governance" ENV="shared" TFSTATE_BUCKET="${TFSTATE_BUCKET}"
 
-./scripts/link-stages.sh foundation/01-org-governance foundation/02-security-network data/enterprise/01-platform
-terraform -chdir=data/enterprise/01-platform init
-terraform -chdir=data/enterprise/01-platform plan
-terraform -chdir=data/enterprise/01-platform apply
+./scripts/link-stages.sh --env "${ENV}" foundation/01-org-governance foundation/02-security-network
+make apply STAGE="foundation/02-security-network" ENV="${ENV}" TFSTATE_BUCKET="${TFSTATE_BUCKET}"
 
-./scripts/link-stages.sh data/enterprise/01-platform data/enterprise/02-governance-ops
-terraform -chdir=data/enterprise/02-governance-ops init
-terraform -chdir=data/enterprise/02-governance-ops plan
-terraform -chdir=data/enterprise/02-governance-ops apply
+./scripts/link-stages.sh --env "${ENV}" foundation/01-org-governance foundation/02-security-network data/enterprise/01-platform
+make apply STAGE="data/enterprise/01-platform" ENV="${ENV}" TFSTATE_BUCKET="${TFSTATE_BUCKET}"
+
+./scripts/link-stages.sh --env "${ENV}" data/enterprise/01-platform data/enterprise/02-governance-ops
+make apply STAGE="data/enterprise/02-governance-ops" ENV="${ENV}" TFSTATE_BUCKET="${TFSTATE_BUCKET}"
 ```
 
 For cross-repo CI/CD handoffs, export non-sensitive outputs to the `iac-outputs` bucket without sharing `.tfstate`:
 
 ```bash
-./scripts/link-stages.sh --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/01-platform.json" data/enterprise/01-platform
-./scripts/link-stages.sh --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/01-platform.json" /path/to/gcp-data-ingestion/stages/enterprise
+./scripts/link-stages.sh --env "${ENV}" --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/${ENV}-platform.json" \
+  foundation/02-security-network data/enterprise/01-platform data/enterprise/02-governance-ops
+./scripts/link-stages.sh --env "${ENV}" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/${ENV}-platform.json" \
+  /path/to/gcp-data-ingestion/stages/enterprise
 ```
 
-For teardown, use a two-step pass when originally deployed with protection flags enabled:
+For teardown, follow [docs/04-multi-env-and-decommission.md](../../../docs/04-multi-env-and-decommission.md):
 
-1. Set `deletion_protection = false`, `project_deletion_policy = "DELETE"`, and `delete_contents_on_destroy = true` in `custom.auto.tfvars` and run `terraform apply` on each stage.
-2. Run `terraform destroy` in exact reverse order:
-
-```bash
-terraform -chdir=data/enterprise/02-governance-ops destroy
-terraform -chdir=data/enterprise/01-platform destroy
-terraform -chdir=foundation/02-security-network destroy
-terraform -chdir=foundation/01-org-governance destroy
-```
+1. Set `deletion_protection = false`, `project_deletion_policy = "DELETE"`, and `delete_contents_on_destroy = true`.
+2. Remove project liens before destroying `foundation/01-org-governance`.
+3. Destroy stages in exact reverse order (`02-governance-ops` -> `01-platform` -> `02-security-network` -> `01-org-governance`).
 
 Increment `project_suffix` (for example `dev01` to `dev02`) before re-running after project deletion.
 
@@ -184,17 +176,17 @@ Seed two synthetic rows per table before verifying masking and Dataform:
 ```bash
 bq query --use_legacy_sql=false --project_id="${COMPUTE_OR_SANDBOX_PROJECT}" \
   "INSERT INTO \`${CORE_STORAGE_PROJECT}.${BRONZE_DATASET}.pos_orders_cdc\`
-   (order_id, order_date, store_id, customer_id, customer_ic_number, country_code, currency_code, gross_amount, discount_amount, net_amount, status, updated_at)
+   (order_id, customer_id, customer_email, customer_ic_number, store_id, order_status, order_date, gross_amount, discount_amount, tax_amount, net_amount, currency_code, country_code, _ingested_at, _cdc_sequence_num, _op_type, _metadata_deleted)
    VALUES
-   ('ord-1001', CURRENT_DATE(), 'st-01', 'cust-01', '900101145566', 'MY', 'MYR', 120.00, 10.00, 110.00, 'COMPLETED', CURRENT_TIMESTAMP()),
-   ('ord-1002', CURRENT_DATE(), 'st-02', 'cust-02', '880505107788', 'MY', 'MYR', 85.00, 0.00, 85.00, 'COMPLETED', CURRENT_TIMESTAMP());"
+   ('ord-1001', 'cust-01', 'amina@example.com', '900101145566', 'st-01', 'COMPLETED', CURRENT_DATE(), 120.00, 10.00, 0.00, 110.00, 'MYR', 'MY', CURRENT_TIMESTAMP(), 1, 'INSERT', FALSE),
+   ('ord-1002', 'cust-02', 'bala@example.com', '880505107788', 'st-02', 'COMPLETED', CURRENT_DATE(), 85.00, 0.00, 0.00, 85.00, 'MYR', 'MY', CURRENT_TIMESTAMP(), 2, 'INSERT', FALSE);"
 
 bq query --use_legacy_sql=false --project_id="${COMPUTE_OR_SANDBOX_PROJECT}" \
   "INSERT INTO \`${CORE_STORAGE_PROJECT}.${BRONZE_DATASET}.crm_customers_cdc\`
-   (customer_id, customer_name, customer_ic_number, segment, country_code, updated_at)
+   (customer_id, customer_name, customer_email, customer_ic_number, segment, country_code, _ingested_at, _cdc_sequence_num, _op_type, _metadata_deleted)
    VALUES
-   ('cust-01', 'Amina Ali', '900101145566', 'RETAIL', 'MY', CURRENT_TIMESTAMP()),
-   ('cust-02', 'Bala Tan', '880505107788', 'VIP', 'MY', CURRENT_TIMESTAMP());"
+   ('cust-01', 'Amina Ali', 'amina@example.com', '900101145566', 'RETAIL', 'MY', CURRENT_TIMESTAMP(), 1, 'INSERT', FALSE),
+   ('cust-02', 'Bala Tan', 'bala@example.com', '880505107788', 'VIP', 'MY', CURRENT_TIMESTAMP(), 2, 'INSERT', FALSE);"
 
 bq query --use_legacy_sql=false --project_id="${COMPUTE_OR_SANDBOX_PROJECT}" \
   "INSERT INTO \`${GOLD_STORAGE_PROJECT}.${GOLD_DATASET}.masked_customers_canary\`
@@ -211,7 +203,7 @@ bq query --use_legacy_sql=false --project_id="${BI_OR_SANDBOX_PROJECT}" \
   "SELECT customer_id, customer_name, customer_ic_number FROM \`${GOLD_STORAGE_PROJECT}.${GOLD_DATASET}.masked_customers_canary\` ORDER BY customer_id"
 ```
 
-Trigger and inspect the Dataplex profile scan:
+Trigger and inspect the Dataplex profile and quality scans:
 
 ```bash
 gcloud dataplex datascans run "${SCAN_ID}" --project="${SCAN_PROJECT}" --location="${REGION}"
@@ -221,6 +213,7 @@ gcloud dataplex datascans jobs list --datascan="${SCAN_ID}" --project="${SCAN_PR
 Compile, assert zero `compilationErrors`, invoke Dataform, and poll until `SUCCEEDED`:
 
 ```bash
+ENV="${ENV:-dev}"
 TOKEN=$(gcloud auth print-access-token)
 REPO_PATH="projects/${ETL_PROJECT}/locations/${REGION}/repositories/${PREFIX}-medallion"
 
@@ -228,7 +221,7 @@ COMP_JSON=$(curl -fsS -X POST \
   "https://dataform.googleapis.com/v1beta1/${REPO_PATH}/compilationResults" \
   -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/json" \
-  -d "{\"releaseConfig\": \"${REPO_PATH}/releaseConfigs/prod-main\"}")
+  -d "{\"releaseConfig\": \"${REPO_PATH}/releaseConfigs/${ENV}-main\"}")
 
 COMPILATION_NAME=$(python3 - <<'PY' "${COMP_JSON}"
 import json, sys

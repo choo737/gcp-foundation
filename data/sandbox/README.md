@@ -4,19 +4,18 @@ This root deploys a single-project Medallion data platform for testing and valid
 
 ## What It Deploys
 
-- Required BigQuery, Data Catalog, Dataplex, Dataform, Secret Manager, and IAM APIs.
+- Required BigQuery, Artifact Registry, Data Catalog, Dataplex, Dataform, Cloud Run, and Storage APIs.
 - Data Catalog taxonomy, `pii_restricted` tag, `pii_masked` tag, and `LAST_FOUR_CHARACTERS` masking policy.
-- Five datasets: `bronze_raw`, `silver_curated`, `silver_assertions`, `gold_mart`, and `ops_telemetry`.
-- Seeded `pos_orders_cdc` and `crm_customers_cdc` bronze tables plus `masked_customers_canary` in `gold_mart`.
-- An `ops_job_cost_monitor` view over regional `INFORMATION_SCHEMA.JOBS_BY_PROJECT`.
-- One Dataplex data profile scan on `masked_customers_canary`.
-- One Dataform repository linked to the Medallion Git repo with least-privilege IAM.
+- Versioned landing GCS bucket (`incoming/` lifecycle rule) and Docker Artifact Registry repository.
+- Six datasets: `bronze_raw`, `silver_curated`, `silver_assertions`, `gold_mart`, `quarantine`, and `ops_telemetry`.
+- Partitioned `pos_orders_cdc` and `crm_customers_cdc` bronze tables plus `masked_customers_canary`.
+- Dataplex profile and `silver.fct_orders` data quality scans plus Dataform with custom IAM role.
 
 ## Usage
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
-terraform init
+terraform init -backend=false
 terraform plan
 terraform apply
 ```
