@@ -307,6 +307,42 @@ class EnterpriseReadinessTest(unittest.TestCase):
         self.assertIn("resource-manager liens", decomm_text)
         self.assertIn("state rm", decomm_text)
 
+    def test_questionnaire_and_launchpad_handoff(self) -> None:
+        questionnaire_path = REPO_ROOT / "QUESTIONNAIRE.md"
+        self.assertTrue(questionnaire_path.is_file(), "Missing QUESTIONNAIRE.md")
+        questionnaire_text = questionnaire_path.read_text(encoding="utf-8")
+
+        for token in (
+            "retention_days",
+            "2555",
+            "lock_audit_bucket",
+            "kms_protection_level",
+            "scc_tier",
+            "enforce_vpc_sc",
+            "platform-context.json",
+            "https://github.com/choo737/gcp-launchpad",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, questionnaire_text)
+
+        for rel in (
+            "README.md",
+            "AGENTS.md",
+            "CLAUDE.md",
+            "GEMINI.md",
+            ".agents/skills/setup-customer-foundation/SKILL.md",
+        ):
+            doc_text = (REPO_ROOT / rel).read_text(encoding="utf-8")
+            with self.subTest(doc=rel):
+                self.assertIn("QUESTIONNAIRE.md", doc_text)
+                self.assertIn("platform-context.json", doc_text)
+                self.assertIn("https://github.com/choo737/gcp-launchpad", doc_text)
+
+        gitignore_text = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
+        for entry in ("platform-context.json", ".cm_project", ".codemender/"):
+            with self.subTest(gitignore_entry=entry):
+                self.assertIn(entry, gitignore_text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -13,10 +13,11 @@ This repository holds Terraform modules and runnable stages for Google Cloud fou
 
 ## Interactive Customer Setup Protocol
 
-Always load `.agents/skills/setup-customer-foundation/SKILL.md` when helping a user deploy this repository.
+Always load `.agents/skills/setup-customer-foundation/SKILL.md` and `QUESTIONNAIRE.md` when helping a user deploy this repository.
+When routed from `https://github.com/choo737/gcp-launchpad`, check for optional `platform-context.json` before asking repeated questions.
 
 1. **Create a private repo first**: Never use public forks; run `gh repo create --private` and verify `isPrivate == true`.
-2. **Ask the customer first**: Never guess org IDs, billing accounts, project IDs, or IAM principals.
+2. **Ask the customer first**: Walk through `QUESTIONNAIRE.md` and never guess org IDs, billing accounts, project IDs, or IAM principals.
 3. **Confirm path and lifecycle**: Ask for Path 0, Path 1, Path 2, or Path 3, plus environment (`dev`, `staging`, `prod`).
 4. **Validate prefix and suffix**: Keep `prefix` to 3-6 chars and set `project_suffix` (`dev01`) to avoid 30-day soft-delete collisions.
 5. **Verify GCP auth**: Check `gcloud config get-value account` and support `GOOGLE_OAUTH_ACCESS_TOKEN` for named configs.
@@ -30,7 +31,7 @@ Always load `.agents/skills/setup-customer-foundation/SKILL.md` when helping a u
 3. Environment-scoped stages (`foundation/02-security-network`, `data/enterprise/01-platform`, `data/enterprise/02-governance-ops`) also contain `envs/{dev,staging,prod}.tfvars.example`.
 4. Every `versions.tf` must pin `required_version = ">= 1.8.0"` and `hashicorp/google` `version = ">= 8.0.0, < 9.0.0"`.
 5. Never commit real GCP project IDs, organization IDs, folder IDs, billing IDs, secrets, or personal handles.
-6. Never commit `terraform.tfvars`, `custom.auto.tfvars`, `*.tfstate*`, `.terraform/`, or `00_linked.auto.tfvars.json`.
+6. Never commit `terraform.tfvars`, `custom.auto.tfvars`, `platform-context.json`, `*.tfstate*`, `.terraform/`, or `00_linked.auto.tfvars.json`.
 7. Keep project IDs within 30 characters and Dataform variables compatible with `https://github.com/choo737/gcp-data-medallion.git`.
 
 ## Verification Commands

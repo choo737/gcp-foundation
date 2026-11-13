@@ -31,10 +31,11 @@ gh repo create acme-corp/gcp-foundation --private --template choo737/gcp-foundat
 
 ## Interactive Customer Onboarding
 
+Start with [QUESTIONNAIRE.md](QUESTIONNAIRE.md) or route from `https://github.com/choo737/gcp-launchpad` via gitignored `platform-context.json`.
 If you use a coding agent, it follows [.agents/skills/setup-customer-foundation/SKILL.md](.agents/skills/setup-customer-foundation/SKILL.md):
 
 1. Create a private repository first (`gh repo create <owner>/<repo> --private --template choo737/gcp-foundation --clone`).
-2. Ask for your adoption path, GCP IDs, `prefix`, `project_suffix`, environment (`dev`, `staging`, `prod`), and lifecycle flags.
+2. Complete [QUESTIONNAIRE.md](QUESTIONNAIRE.md) for adoption path, compliance profile, GCP IDs, `prefix`, `project_suffix`, and environment.
 3. Verify active `gcloud` authentication (`gcloud config get-value account` or `GOOGLE_OAUTH_ACCESS_TOKEN`).
 4. Write customer values into gitignored `custom.auto.tfvars` or `envs/<env>.tfvars` and link stages via `scripts/link-stages.sh`.
 5. Use `--export-gcs` and `--from-gcs` for cross-repo CI/CD handoffs without sharing `.tfstate` files.
@@ -67,6 +68,7 @@ make test
 
 ## Documentation Index
 
+- [Tier-2 Foundation and Data Platform Questionnaire](QUESTIONNAIRE.md)
 - [Architecture Overview](docs/01-architecture.md)
 - [Entry Points Guide](docs/02-entry-points.md)
 - [Cloudera to BigQuery Mapping](docs/03-cloudera-to-bigquery.md)
