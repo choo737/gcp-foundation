@@ -93,7 +93,9 @@ BANNED_AI_WORDS = (
 
 EMOJI_PATTERN = re.compile(r"[\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F]")
 SECTION_SYMBOL = "\u00a7"
-HCL_BLOCK_KEYWORD_RE = re.compile(r'\bdyn' + r'amic\s+"[a-z0-9_]+"')
+HCL_BLOCK_KEYWORD_RE = re.compile(
+    r'\bdyn' + r'amic\s+"[a-z0-9_]+"|\btype\s*=\s*"DYN' + r'AMIC"'
+)
 BULLET_PREFIX_RE = re.compile(r"^(?:[-*]|\d+\.)\s+")
 
 

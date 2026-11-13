@@ -150,16 +150,56 @@ variable "enable_siem_pubsub_sink" {
   description = "Whether to create an optional Pub/Sub sink for external SIEM ingestion."
 }
 
+variable "scc_tier" {
+  type        = string
+  default     = "NONE"
+  description = "Security Command Center tier to wire (NONE, STANDARD, or PREMIUM)."
+
+  validation {
+    condition     = contains(["NONE", "STANDARD", "PREMIUM"], var.scc_tier)
+    error_message = "scc_tier must be NONE, STANDARD, or PREMIUM."
+  }
+}
+
+variable "scc_location" {
+  type        = string
+  default     = "global"
+  description = "SCC v2 API location (global, us, eu, or sa). BigQuery findings export still stores rows in var.region."
+
+  validation {
+    condition     = contains(["global", "us", "eu", "sa"], var.scc_location)
+    error_message = "scc_location must be global, us, eu, or sa."
+  }
+}
+
 variable "enable_scc_notifications" {
   type        = bool
   default     = false
-  description = "Whether to stream HIGH and CRITICAL SCC v2 folder findings to Pub/Sub."
+  description = "Legacy toggle promoting scc_tier to STANDARD when scc_tier is NONE."
 }
 
 variable "scc_notification_location" {
   type        = string
   default     = "global"
-  description = "Location ID for the Security Command Center v2 folder notification config."
+  description = "Legacy SCC v2 location fallback used when scc_location stays global."
+}
+
+variable "scc_alert_email_addresses" {
+  type        = list(string)
+  default     = []
+  description = "Email addresses notified for unacknowledged HIGH and CRITICAL SCC findings."
+}
+
+variable "enable_security_posture" {
+  type        = bool
+  default     = false
+  description = "Whether PREMIUM tier deploys a declarative Security Posture (requires organization_id)."
+}
+
+variable "organization_id" {
+  type        = string
+  default     = ""
+  description = "Optional organization ID (organizations/<id> or <id>) for Security Posture when parent_id is a folder."
 }
 
 variable "essential_contacts" {

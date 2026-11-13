@@ -32,30 +32,13 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
-  plan:
-    if: github.event_name == 'pull_request' && vars.GCP_WIF_PROVIDER != '' && vars.GCP_TFSTATE_BUCKET != ''
+  validate:
     runs-on: ubuntu-latest
-    environment: dev
-    strategy:
-      fail-fast: false
-      matrix:
-        stage:
-          - foundation/01-org-governance
-          - foundation/02-security-network
-          - data/enterprise/01-platform
-          - data/enterprise/02-governance-ops
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
-      - name: Authenticate via GitHub OIDC WIF
-        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
-        with:
-          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_TF_SA_EMAIL }}
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
@@ -63,32 +46,31 @@ jobs:
           terraform_version: "1.8.5"
           terraform_wrapper: false
 
-      - name: Terraform Init and Plan (dev)
-        env:
-          TARGET_STAGE: ${{ matrix.stage }}
-          TFSTATE_BUCKET: ${{ vars.GCP_TFSTATE_BUCKET }}
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Offline formatting, validation, and unit tests (no cloud credentials on PRs)
         run: |
-          case "${TARGET_STAGE}" in
-            foundation/01-org-governance|foundation/02-security-network|data/sandbox|data/enterprise/01-platform|data/enterprise/02-governance-ops) ;;
-            *) echo "Disallowed stage: ${TARGET_STAGE}" >&2; exit 1 ;;
-          esac
-          if [[ ! "${TFSTATE_BUCKET}" =~ ^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$ ]]; then
-            echo "Invalid GCS bucket name in GCP_TFSTATE_BUCKET" >&2
-            exit 1
-          fi
-          terraform -chdir="${TARGET_STAGE}" init -reconfigure -input=false \
-            -backend-config="bucket=${TFSTATE_BUCKET}" \
-            -backend-config="prefix=${TARGET_STAGE}/dev"
-          if [ -f "${TARGET_STAGE}/envs/dev.tfvars" ]; then
-            terraform -chdir="${TARGET_STAGE}" plan -input=false -var-file="envs/dev.tfvars"
-          else
-            terraform -chdir="${TARGET_STAGE}" plan -input=false
-          fi
+          make fmt-check
+          make validate
+          python3 -m unittest discover -s tests -v
 
   deploy-dev:
-    if: (github.event_name == 'push' && vars.GCP_WIF_PROVIDER != '' && vars.GCP_TFSTATE_BUCKET != '') || (github.event_name == 'workflow_dispatch' && inputs.environment == 'dev' && vars.GCP_WIF_PROVIDER != '' && vars.GCP_TFSTATE_BUCKET != '')
+    needs: validate
+    if: >-
+      vars.GCP_WIF_PROVIDER != '' &&
+      vars.GCP_TFSTATE_BUCKET != '' &&
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AUTO_DEPLOY_DEV == 'true') ||
+        (github.event_name == 'workflow_dispatch' && inputs.environment == 'dev')
+      )
     runs-on: ubuntu-latest
     environment: dev
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -105,7 +87,7 @@ jobs:
           terraform_version: "1.8.5"
           terraform_wrapper: false
 
-      - name: Terraform Apply (dev)
+      - name: Terraform Plan and Apply (dev)
         env:
           TARGET_STAGE: ${{ inputs.stage || 'data/enterprise/01-platform' }}
           TFSTATE_BUCKET: ${{ vars.GCP_TFSTATE_BUCKET }}
@@ -128,10 +110,23 @@ jobs:
           fi
 
   deploy-staging:
-    needs: deploy-dev
-    if: always() && (needs.deploy-dev.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')) && vars.GCP_WIF_PROVIDER != '' && vars.GCP_TFSTATE_BUCKET != ''
+    needs:
+      - validate
+      - deploy-dev
+    if: >-
+      always() &&
+      needs.validate.result == 'success' &&
+      vars.GCP_WIF_PROVIDER != '' &&
+      vars.GCP_TFSTATE_BUCKET != '' &&
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AUTO_PROMOTE_STAGING == 'true' && needs.deploy-dev.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
+      )
     runs-on: ubuntu-latest
     environment: staging
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -148,7 +143,7 @@ jobs:
           terraform_version: "1.8.5"
           terraform_wrapper: false
 
-      - name: Terraform Apply (staging)
+      - name: Terraform Plan and Apply (staging)
         env:
           TARGET_STAGE: ${{ inputs.stage || 'data/enterprise/01-platform' }}
           TFSTATE_BUCKET: ${{ vars.GCP_TFSTATE_BUCKET }}
@@ -171,10 +166,18 @@ jobs:
           fi
 
   deploy-prod:
-    needs: deploy-staging
-    if: always() && (needs.deploy-staging.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'prod')) && vars.GCP_WIF_PROVIDER != '' && vars.GCP_TFSTATE_BUCKET != ''
+    needs: validate
+    if: >-
+      needs.validate.result == 'success' &&
+      vars.GCP_WIF_PROVIDER != '' &&
+      vars.GCP_TFSTATE_BUCKET != '' &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.environment == 'prod'
     runs-on: ubuntu-latest
     environment: prod
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -191,7 +194,7 @@ jobs:
           terraform_version: "1.8.5"
           terraform_wrapper: false
 
-      - name: Terraform Apply (prod)
+      - name: Terraform Plan and Apply (prod)
         env:
           TARGET_STAGE: ${{ inputs.stage || 'data/enterprise/01-platform' }}
           TFSTATE_BUCKET: ${{ vars.GCP_TFSTATE_BUCKET }}

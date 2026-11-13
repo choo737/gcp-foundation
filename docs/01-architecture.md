@@ -61,6 +61,8 @@ How `00_linked.auto.tfvars.json` and `gs://<prefix>-iac-outputs` solve this:
 - Foundation stage 00 creates hardened `tfstate` and `iac-outputs` buckets plus scoped GitHub WIF.
 - Foundation stage 01 locks the audit bucket, attaches a project lien, and enforces FinOps tags.
 - Foundation stage 01 enforces a 36-policy Org Policy baseline when `enable_org_policies = true`.
+- Foundation stage 01 supports tiered SCC (`NONE`, `STANDARD`, `PREMIUM`) via `modules/foundation/scc-secops` (Enterprise tier retired May 2026).
+- SCC v2 APIs use `scc_location` (`global`, `us`, `eu`, `sa`), while BigQuery findings stay regional in `var.region`.
 - Foundation stage 02 configures CMEK, Shared VPC, Flow Logs, DNS logging, VPC-SC, and monitoring alerts.
 - Stage 02 enforces a network firewall policy with PSC TCP 443 allow and default deny-all egress.
 - Dataform ETL uses the custom `dataform_pipeline_runner` role without dataset update or delete rights.

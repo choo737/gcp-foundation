@@ -32,13 +32,14 @@ locals {
   }
 
   default_ci_bindings = (
-    var.enable_ci_service_accounts && length(var.github_repositories) > 0
+    var.enable_ci_service_accounts
     ? {
       for k, sa in google_service_account.ci :
       k => {
         service_account_id = sa.name
-        repositories       = var.github_repositories
+        repositories       = lookup(var.ci_repository_map, k, [])
       }
+      if length(lookup(var.ci_repository_map, k, [])) > 0
     }
     : {}
   )

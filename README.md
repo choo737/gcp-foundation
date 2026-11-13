@@ -43,7 +43,7 @@ If you use a coding agent, it follows [.agents/skills/setup-customer-foundation/
 
 ## Repository Structure
 
-- `modules/foundation/`: Folder hierarchy, project factory, logging guardrails, FinOps governance, network security, monitoring alerts, and `github-wif`.
+- `modules/foundation/`: Folder hierarchy, project factory, logging guardrails, FinOps governance, network security, monitoring alerts, `scc-secops`, and `github-wif`.
 - `modules/data/`: Governance catalog, BigQuery datasets, slot reservations, Dataplex scans, and Dataform repositories.
 - `foundation/`: Stages `00-bootstrap`, `01-org-governance`, and `02-security-network` (`envs/` templates).
 - `data/sandbox/`: Single-project Medallion stack for fast validation.
@@ -54,7 +54,7 @@ If you use a coding agent, it follows [.agents/skills/setup-customer-foundation/
 ## Security & Governance Baseline
 
 - Stage 00 configures hardened `tfstate` and `iac-outputs` buckets, CI service accounts, and scoped GitHub Actions WIF.
-- Stage 01 configures locked audit logging, a project lien, Log Analytics, optional SIEM/SCC alerts, and 36 Org Policies.
+- Stage 01 configures locked audit logging, a project lien, Log Analytics, tiered SCC (`NONE`, `STANDARD`, `PREMIUM`), and 36 Org Policies.
 - Stage 02 configures primary/DR CMEK, Shared VPC, VPC Flow Logs, DNS logging, VPC-SC perimeters, and monitoring alerts.
 
 ## Quick Verification

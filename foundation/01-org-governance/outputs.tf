@@ -138,9 +138,44 @@ output "siem_pubsub_topic_id" {
   description = "Pub/Sub topic ID for optional SIEM log export, or null."
 }
 
+output "scc_tier" {
+  value       = module.scc_secops.scc_tier
+  description = "Effective Security Command Center tier (NONE, STANDARD, or PREMIUM)."
+}
+
+output "scc_findings_dataset_id" {
+  value       = module.scc_secops.scc_findings_dataset_id
+  description = "Regional BigQuery dataset ID storing exported SCC v2 findings, or null."
+}
+
+output "scc_big_query_export_name" {
+  value       = module.scc_secops.scc_big_query_export_name
+  description = "SCC v2 continuous BigQuery export resource name, or null."
+}
+
+output "scc_findings_topic_id" {
+  value       = module.scc_secops.scc_findings_topic_id
+  description = "Pub/Sub topic ID for HIGH and CRITICAL SCC v2 findings, or null."
+}
+
 output "scc_pubsub_topic_id" {
-  value       = module.logging_guardrails.scc_pubsub_topic_id
-  description = "Pub/Sub topic ID for SCC v2 high and critical findings, or null."
+  value       = module.scc_secops.scc_findings_topic_id
+  description = "Alias for scc_findings_topic_id for backwards compatibility."
+}
+
+output "scc_findings_subscription_id" {
+  value       = module.scc_secops.scc_findings_subscription_id
+  description = "Pub/Sub pull subscription ID monitored for unacknowledged SCC findings, or null."
+}
+
+output "scc_custom_sha_module_ids" {
+  value       = module.scc_secops.scc_custom_sha_module_ids
+  description = "Custom Security Health Analytics module resource names deployed in PREMIUM tier."
+}
+
+output "scc_posture_deployment_id" {
+  value       = module.scc_secops.scc_posture_deployment_id
+  description = "Security Posture deployment resource name on the root folder, or null."
 }
 
 output "enforced_org_policy_names" {

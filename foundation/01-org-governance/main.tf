@@ -6,6 +6,21 @@ locals {
     ["in:${var.region}-locations"],
     local.trimmed_dr_region != "" ? ["in:${local.trimmed_dr_region}-locations"] : [],
   )
+
+  effective_scc_tier     = var.scc_tier != "NONE" ? var.scc_tier : (var.enable_scc_notifications ? "STANDARD" : "NONE")
+  trimmed_scc_loc        = var.scc_location != null ? trimspace(var.scc_location) : ""
+  trimmed_legacy_scc_loc = var.scc_notification_location != null ? trimspace(var.scc_notification_location) : ""
+  effective_scc_location = (
+    local.trimmed_scc_loc != "" && local.trimmed_scc_loc != "global"
+    ? local.trimmed_scc_loc
+    : (local.trimmed_legacy_scc_loc != "" ? local.trimmed_legacy_scc_loc : "global")
+  )
+  trimmed_org_id = var.organization_id != null ? trimspace(var.organization_id) : ""
+  effective_organization_id = (
+    local.trimmed_org_id != ""
+    ? local.trimmed_org_id
+    : (startswith(var.parent_id, "organizations/") ? var.parent_id : "")
+  )
 }
 
 provider "google" {
@@ -52,7 +67,14 @@ module "audit_project" {
       "bigquery.googleapis.com",
       "essentialcontacts.googleapis.com",
     ],
-    var.enable_scc_notifications ? ["securitycenter.googleapis.com"] : [],
+    local.effective_scc_tier != "NONE" ? [
+      "securitycenter.googleapis.com",
+      "monitoring.googleapis.com",
+    ] : [],
+    local.effective_scc_tier == "PREMIUM" ? concat(
+      ["securitycentermanagement.googleapis.com"],
+      var.enable_security_posture ? ["securityposture.googleapis.com"] : [],
+    ) : [],
   )
 }
 
@@ -92,8 +114,8 @@ module "logging_guardrails" {
   enable_log_analytics_link         = var.enable_log_analytics_link
   enable_folder_sink                = true
   enable_siem_pubsub_sink           = var.enable_siem_pubsub_sink
-  enable_scc_notifications          = var.enable_scc_notifications
-  scc_notification_location         = var.scc_notification_location
+  enable_scc_notifications          = false
+  scc_notification_location         = local.effective_scc_location
   essential_contacts                = var.essential_contacts
   foundation_iam_groups             = var.foundation_iam_groups
   enable_data_access_audit_logs     = var.enable_data_access_audit_logs
@@ -137,4 +159,27 @@ resource "google_tags_tag_binding" "audit_finops" {
 
   parent    = "//cloudresourcemanager.googleapis.com/projects/${module.audit_project.project_number}"
   tag_value = module.finops_governance.finops_tag_value_ids[each.value]
+}
+
+module "scc_secops" {
+  source = "../../modules/foundation/scc-secops"
+
+  providers = {
+    google = google.billing_quota
+  }
+
+  scc_tier                   = local.effective_scc_tier
+  scc_location               = local.effective_scc_location
+  folder_id                  = module.folder_hierarchy.root_folder_id
+  environment_folder_ids     = module.folder_hierarchy.environment_folder_ids
+  audit_project_id           = module.audit_project.project_id
+  prefix                     = var.prefix
+  region                     = var.region
+  delete_contents_on_destroy = var.delete_contents_on_destroy
+  alert_email_addresses      = var.scc_alert_email_addresses
+  enable_security_posture    = var.enable_security_posture
+  organization_id            = local.effective_organization_id
+  labels                     = var.labels
+
+  depends_on = [time_sleep.audit_api_propagation]
 }

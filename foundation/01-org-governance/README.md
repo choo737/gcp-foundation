@@ -1,14 +1,25 @@
 # Foundation Stage 01: Org Governance
 
-This stage deploys folders, the audit project, locked logging, and FinOps guardrails.
+This stage deploys folders, the audit project, locked logging, FinOps, and Security Command Center.
 
 ## Resources Deployed
 
 - Root, `01-shared-infrastructure`, `02-workloads`, and `02-environments/{dev,staging,prod}` folders.
 - `${prefix}-audit` project protected by a Resource Manager deletion lien.
 - Locked central audit log bucket with Log Analytics and BigQuery linked dataset.
-- Optional SIEM Pub/Sub sink, SCC v2 notification topic, Essential Contacts, and viewer IAM groups.
+- Optional SIEM Pub/Sub sink, Essential Contacts, and viewer IAM groups.
 - Optional 36-policy Org Policy baseline plus FinOps budget, export dataset, and tag bindings.
+- Tiered Security Command Center wiring via `modules/foundation/scc-secops` (`NONE`, `STANDARD`, or `PREMIUM`).
+
+## Tiered Security Command Center
+
+Google deprecated the SCC Enterprise tier in May 2026.
+Only `STANDARD` (free) and `PREMIUM` (paid) remain active tiers.
+
+- `STANDARD` deploys regional BigQuery findings export (`var.region`), Pub/Sub alerts, Monitoring policy, and non-prod mutes.
+- `PREMIUM` adds Custom SHA CEL modules (`prod` BigQuery CMEK and GCS UBLA) and optional Security Posture drift checks.
+- Set `scc_location` (`global`, `us`, `eu`, or `sa`) for SCC v2 APIs; BigQuery data stays in `var.region`.
+- Setting legacy `enable_scc_notifications = true` promotes `scc_tier = "NONE"` to `"STANDARD"` automatically.
 
 ## Org Policy Guardrails
 
