@@ -47,13 +47,14 @@ class AgenticContextAndToolingTest(unittest.TestCase):
             "8.0.0",
             "1.8.0",
         )
-        for doc_name in ("AGENTS.md", "CLAUDE.md", "GEMINI.md"):
+        for doc_name in ("AGENTS.md", "CLAUDE.md"):
             doc_path = REPO_ROOT / doc_name
             with self.subTest(doc=doc_name):
                 self.assertTrue(doc_path.is_file(), f"Missing {doc_name}")
                 content = doc_path.read_text(encoding="utf-8")
                 for ref in required_refs:
                     self.assertIn(ref, content, f"{doc_name} missing ref {ref}")
+        self.assertFalse((REPO_ROOT / "GEMINI.md").exists(), "GEMINI.md must not exist")
 
     def test_project_id_length_math_within_30_chars(self) -> None:
         max_prefix = 8

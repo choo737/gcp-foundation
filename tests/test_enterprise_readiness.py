@@ -329,7 +329,6 @@ class EnterpriseReadinessTest(unittest.TestCase):
             "README.md",
             "AGENTS.md",
             "CLAUDE.md",
-            "GEMINI.md",
             ".agents/skills/setup-customer-foundation/SKILL.md",
         ):
             doc_text = (REPO_ROOT / rel).read_text(encoding="utf-8")
