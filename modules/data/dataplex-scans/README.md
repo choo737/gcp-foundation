@@ -5,8 +5,8 @@ This module creates on-demand Dataplex data profile and data quality scans for B
 ## Resources Managed
 
 - `google_dataplex_datascan` profile resources with `data_profile_spec`.
-- Optional `google_dataplex_datascan` quality resource with `data_quality_spec` targeting `silver.fct_orders`.
-- Optional BigQuery results export when `quality_results_table` or `quarantine_dataset_id` is set.
+- Optional `google_dataplex_datascan` quality resource with `data_quality_spec` targeting `silver.fct_orders` or declarative `quality_rules`.
+- Optional `quality_schedule_cron` trigger and BigQuery results export via `quality_results_table` or `quarantine_dataset_id`.
 
 ## Usage
 

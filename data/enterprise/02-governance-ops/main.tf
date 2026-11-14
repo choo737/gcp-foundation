@@ -18,6 +18,12 @@ data "google_project" "gold" {
   project_id = var.primary_gold_project_id
 }
 
+data "google_project" "domains" {
+  for_each = var.domain_storage_project_ids
+
+  project_id = each.value
+}
+
 locals {
   effective_kms_key_id       = var.kms_key_id != null ? trimspace(var.kms_key_id) : ""
   use_cmek                   = local.effective_kms_key_id != ""
@@ -65,25 +71,48 @@ locals {
     local.gold_owner_targets,
   )
 
-  retail_vars = (
-    contains(keys(var.domain_storage_project_ids), "retail") && contains(keys(var.domain_gold_dataset_ids), "retail")
+  domain_project_vars = {
+    for d, proj_id in var.domain_storage_project_ids :
+    "gold_${d}_project" => proj_id
+    if contains(keys(var.domain_gold_dataset_ids), d)
+  }
+
+  domain_dataset_vars = {
+    for d, ds_id in var.domain_gold_dataset_ids :
+    "gold_${d}_dataset" => ds_id
+    if contains(keys(var.domain_storage_project_ids), d)
+  }
+
+  retail_alias_vars = (
+    contains(keys(var.domain_storage_project_ids), "ret") &&
+    contains(keys(var.domain_gold_dataset_ids), "ret") &&
+    !contains(keys(var.domain_storage_project_ids), "retail")
     ? {
-      gold_retail_project = var.domain_storage_project_ids["retail"]
-      gold_retail_dataset = var.domain_gold_dataset_ids["retail"]
+      gold_retail_project = var.domain_storage_project_ids["ret"]
+      gold_retail_dataset = var.domain_gold_dataset_ids["ret"]
     }
     : {}
   )
 
-  extra_compilation_vars = merge(
-    { allow_untagged_pii = "false" },
-    local.retail_vars,
+  domain_compilation_vars = merge(
+    local.domain_project_vars,
+    local.domain_dataset_vars,
+    local.retail_alias_vars,
   )
 
-  vpc_sc_target_projects = distinct([
-    "projects/${data.google_project.core.number}",
-    "projects/${data.google_project.etl.number}",
-    "projects/${data.google_project.gold.number}",
-  ])
+  extra_compilation_vars = merge(
+    { allow_untagged_pii = "false" },
+    local.domain_compilation_vars,
+  )
+
+  vpc_sc_target_projects = distinct(concat(
+    [
+      "projects/${data.google_project.core.number}",
+      "projects/${data.google_project.etl.number}",
+      "projects/${data.google_project.gold.number}",
+    ],
+    [for p in data.google_project.domains : "projects/${p.number}"],
+  ))
 
   dataform_etl_account_id = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-dataform-etl"), 0, 30), "-")
   dataform_runtime_identities = [
@@ -209,6 +238,24 @@ resource "google_bigquery_dataset_iam_member" "dataplex_gold_viewer" {
   depends_on = [time_sleep.service_identity_propagation]
 }
 
+resource "google_bigquery_dataset_iam_member" "dataplex_domain_gold_viewer" {
+  for_each = {
+    for domain, proj_id in var.domain_storage_project_ids :
+    domain => {
+      project_id = proj_id
+      dataset_id = var.domain_gold_dataset_ids[domain]
+    }
+    if contains(keys(var.domain_gold_dataset_ids), domain) && proj_id != var.primary_gold_project_id
+  }
+
+  project    = each.value.project_id
+  dataset_id = each.value.dataset_id
+  role       = "roles/bigquery.dataViewer"
+  member     = google_project_service_identity.dataplex_agent.member
+
+  depends_on = [time_sleep.service_identity_propagation]
+}
+
 resource "google_bigquery_dataset_iam_member" "dataplex_silver_viewer" {
   project    = var.core_storage_project_id
   dataset_id = var.silver_dataset_id
@@ -219,7 +266,7 @@ resource "google_bigquery_dataset_iam_member" "dataplex_silver_viewer" {
 }
 
 resource "google_bigquery_dataset_iam_member" "dataplex_quarantine_editor" {
-  count = var.enable_quality_scan && local.effective_quarantine_ds != "" ? 1 : 0
+  count = (var.enable_quality_scan || length(var.additional_quality_scans) > 0) && local.effective_quarantine_ds != "" ? 1 : 0
 
   project    = var.core_storage_project_id
   dataset_id = local.effective_quarantine_ds
@@ -812,6 +859,7 @@ resource "time_sleep" "dataplex_iam_propagation" {
     time_sleep.iam_and_kms_propagation,
     google_bigquery_datapolicy_data_policy_iam_member.dataplex_masked_reader,
     google_bigquery_dataset_iam_member.dataplex_gold_viewer,
+    google_bigquery_dataset_iam_member.dataplex_domain_gold_viewer,
     google_bigquery_dataset_iam_member.dataplex_silver_viewer,
     google_bigquery_dataset_iam_member.dataplex_quarantine_editor,
     google_project_iam_member.dataplex_agent_job_user,
@@ -844,6 +892,30 @@ module "dataplex_scans" {
       description      = "On-demand data profile scan for masked_customers_canary."
     }
   }
+
+  depends_on = [time_sleep.dataplex_iam_propagation]
+}
+
+module "additional_quality_scans" {
+  for_each = var.additional_quality_scans
+  source   = "../../../modules/data/dataplex-scans"
+
+  project_id                = var.primary_gold_project_id
+  region                    = var.region
+  prefix                    = var.prefix
+  enable_quality_scan       = true
+  quality_scan_id           = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-${replace(each.key, "_", "-")}-quality"), 0, 63), "-")
+  quality_target_project_id = each.value.project_id != "" ? each.value.project_id : var.core_storage_project_id
+  quality_target_dataset_id = each.value.dataset_id != "" ? each.value.dataset_id : var.silver_dataset_id
+  quality_target_table_id   = each.value.table_id
+  quality_row_filter        = each.value.row_filter
+  quality_sampling_percent  = each.value.sampling_percent
+  quality_schedule_cron     = each.value.schedule_cron
+  quarantine_project_id     = var.core_storage_project_id
+  quarantine_dataset_id     = local.effective_quarantine_ds
+  quality_results_table     = each.value.results_table
+  quality_rules             = each.value.rules
+  labels                    = local.env_labels
 
   depends_on = [time_sleep.dataplex_iam_propagation]
 }

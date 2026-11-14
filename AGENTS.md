@@ -10,6 +10,8 @@ This repository holds Terraform modules and runnable stages for Google Cloud fou
 - `data/sandbox/`: Single-project Medallion deployment root.
 - `data/enterprise/`: Multi-project stages `01-platform` and `02-governance-ops`.
 - `scripts/link-stages.sh`: Links Terraform outputs locally or via GCS into `00_linked.auto.tfvars.json`.
+- `CODEOWNERS`: Enforces `@choo737` pull request review ownership across foundation, data, module, and workflow directories.
+- `docs/05-enterprise-operationalization-guide.md`: Step-by-step Day-0 through Day-2 operationalization guide.
 
 ## Interactive Customer Setup Protocol
 

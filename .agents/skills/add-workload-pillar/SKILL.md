@@ -1,16 +1,17 @@
 ---
 name: add-workload-pillar
-description: Add a new workload folder under 02-workloads alongside data-platform without breaking folder hierarchy symmetry.
+description: Add a new workload folder under 02-environments or workload_folders alongside data-platform without breaking symmetry.
 ---
 
 # Add Workload Pillar
 
-Extend `02-workloads` for new platform domains such as AI, app hosting, or sandbox workloads.
+Extend `02-environments` and `workload_folders` for new platform domains such as AI, app hosting, or sandbox workloads.
 
 ## Steps
 
-1. Pass the new folder name in `workload_folders` on `module.folder_hierarchy` inside `foundation/01-org-governance/main.tf`.
-2. Export the new folder ID in `foundation/01-org-governance/outputs.tf` using `module.folder_hierarchy.workload_folder_ids["<pillar>"]`.
-3. Create a matching runnable stage directory obeying the 6-file symmetry contract.
-4. Keep reusable modules strictly inside `modules/<pillar>/<module>/` obeying the 5-file symmetry contract.
-5. Add the new runnable stage to `ROOTS` in `Makefile` and run `make validate` and `make test`.
+1. Decide whether the pillar lives per environment under `02-environments/<env>` (`environment_folder_ids`) or as a shared folder in `workload_folders`.
+2. For shared pillars, add the folder name to `workload_folders` on `module.folder_hierarchy` inside `foundation/01-org-governance/main.tf`.
+3. For environment-scoped pillars, read `environment_folder_ids["<env>"]` from `foundation/01-org-governance/outputs.tf` via `scripts/link-stages.sh`.
+4. Create the runnable stage directory obeying the 7-file contract (`README.md`, `main.tf`, `variables.tf`, `outputs.tf`, `versions.tf`, `terraform.tfvars.example`, `.terraform.lock.hcl`) plus `envs/`.
+5. Keep reusable modules strictly inside `modules/<pillar>/<module>/` obeying the 5-file symmetry contract.
+6. Add the new runnable stage to `ROOTS` in `Makefile` and run `make validate` and `make test`.

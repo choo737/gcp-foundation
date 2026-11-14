@@ -167,6 +167,32 @@ variable "quality_results_table" {
   description = "Optional full BigQuery resource URI for Dataplex quality results export."
 }
 
+variable "additional_quality_scans" {
+  type = map(object({
+    project_id       = optional(string, "")
+    dataset_id       = optional(string, "")
+    table_id         = string
+    row_filter       = optional(string, "")
+    sampling_percent = optional(number, 100)
+    schedule_cron    = optional(string, "")
+    results_table    = optional(string, "")
+    rules = list(object({
+      name          = string
+      dimension     = string
+      column        = optional(string, "")
+      threshold     = optional(number, 1.0)
+      non_null      = optional(bool, false)
+      sql_assertion = optional(string, "")
+      min_value     = optional(string, "")
+      max_value     = optional(string, "")
+      set_values    = optional(list(string), [])
+      regex_pattern = optional(string, "")
+    }))
+  }))
+  default     = {}
+  description = "Optional declarative map of additional Dataplex data quality scans across Silver or Gold tables."
+}
+
 variable "delete_contents_on_destroy" {
   type        = bool
   default     = false

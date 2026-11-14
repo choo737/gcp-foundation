@@ -68,6 +68,47 @@ variable "quality_results_table" {
   description = "Optional BigQuery resource URI (//bigquery.googleapis.com/projects/.../tables/...) for quality results export."
 }
 
+variable "quarantine_project_id" {
+  type        = string
+  default     = ""
+  description = "Optional GCP project ID hosting quarantine_dataset_id (defaults to quality target project)."
+}
+
+variable "quality_scan_id" {
+  type        = string
+  default     = ""
+  description = "Optional custom Dataplex data quality scan ID overriding the default scan identifier."
+}
+
+variable "quality_row_filter" {
+  type        = string
+  default     = ""
+  description = "Optional BigQuery SQL WHERE filter applied to custom quality scans."
+}
+
+variable "quality_schedule_cron" {
+  type        = string
+  default     = ""
+  description = "Optional cron schedule for periodic quality scans (empty uses on-demand execution)."
+}
+
+variable "quality_rules" {
+  type = list(object({
+    name          = string
+    dimension     = string
+    column        = optional(string, "")
+    threshold     = optional(number, 1.0)
+    non_null      = optional(bool, false)
+    sql_assertion = optional(string, "")
+    min_value     = optional(string, "")
+    max_value     = optional(string, "")
+    set_values    = optional(list(string), [])
+    regex_pattern = optional(string, "")
+  }))
+  default     = []
+  description = "Optional declarative quality rules evaluated instead of the default Silver orders rules."
+}
+
 variable "labels" {
   type        = map(string)
   default     = {}

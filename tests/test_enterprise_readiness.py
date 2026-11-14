@@ -342,6 +342,75 @@ class EnterpriseReadinessTest(unittest.TestCase):
             with self.subTest(gitignore_entry=entry):
                 self.assertIn(entry, gitignore_text)
 
+    def test_canonical_readme_codeowners_and_operationalization_guide(self) -> None:
+        codeowners = REPO_ROOT / "CODEOWNERS"
+        self.assertTrue(codeowners.is_file(), "Missing CODEOWNERS")
+        co_text = codeowners.read_text(encoding="utf-8")
+        self.assertIn("* @choo737", co_text)
+        for path_rule in ("foundation/", "data/", "modules/foundation/", "modules/data/", ".github/workflows/"):
+            self.assertIn(path_rule, co_text)
+
+        guide = REPO_ROOT / "docs" / "05-enterprise-operationalization-guide.md"
+        self.assertTrue(guide.is_file(), "Missing docs/05-enterprise-operationalization-guide.md")
+        guide_text = guide.read_text(encoding="utf-8")
+        for marker in (
+            "flowchart LR",
+            "00-bootstrap",
+            "01-org-governance",
+            "02-security-network",
+            "01-platform",
+            "02-governance-ops",
+            "additional_quality_scans",
+            "--export-gcs",
+            "gcp-data-ingestion",
+        ):
+            self.assertIn(marker, guide_text)
+
+        readme_text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertTrue(readme_text.startswith("# GCP Foundation\n"))
+        h2_headings = [line for line in readme_text.splitlines() if line.startswith("## ")]
+        expected_headings = [
+            "## Template Suite Overview",
+            "## Create Your Private Repository (Do Not Fork Publicly)",
+            "## Architecture & Capabilities",
+            "## 6-Step Enterprise Operationalization",
+            "## AI Coding Agent Quickstart",
+            "## CI/CD Workflows",
+            "## Repository Layout",
+            "## Quick Verification",
+            "## Documentation Index",
+            "## License",
+        ]
+        self.assertEqual(h2_headings, expected_headings)
+
+        for skill_name in (
+            "setup-customer-foundation",
+            "choose-entry-point",
+            "add-data-domain",
+            "add-workload-pillar",
+            "drift-safe-apply",
+        ):
+            self.assertIn(skill_name, readme_text)
+
+    def test_day2_multi_domain_wiring_and_additional_quality_scans(self) -> None:
+        gov_dir = REPO_ROOT / "data" / "enterprise" / "02-governance-ops"
+        gov_main = (gov_dir / "main.tf").read_text(encoding="utf-8")
+        gov_vars = (gov_dir / "variables.tf").read_text(encoding="utf-8")
+        gov_outs = (gov_dir / "outputs.tf").read_text(encoding="utf-8")
+
+        self.assertIn('data "google_project" "domains"', gov_main)
+        self.assertIn("for_each = var.domain_storage_project_ids", gov_main)
+        self.assertIn("data.google_project.domains", gov_main)
+        self.assertIn("domain_compilation_vars", gov_main)
+        self.assertIn("gold_${d}_project", gov_main)
+        self.assertIn("gold_${d}_dataset", gov_main)
+        self.assertIn("gold_retail_project", gov_main)
+        self.assertIn("gold_retail_dataset", gov_main)
+        self.assertIn('variable "additional_quality_scans"', gov_vars)
+        self.assertIn('module "additional_quality_scans"', gov_main)
+        self.assertIn("for_each = var.additional_quality_scans", gov_main)
+        self.assertIn('output "additional_quality_scan_ids"', gov_outs)
+
 
 if __name__ == "__main__":
     unittest.main()

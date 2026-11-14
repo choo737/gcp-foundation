@@ -29,8 +29,11 @@ output "dataplex_service_agent_email" {
 }
 
 output "dataplex_scan_names" {
-  value       = module.dataplex_scans.scan_names
-  description = "Map of Dataplex data profile scan resource names."
+  value = merge(
+    module.dataplex_scans.scan_names,
+    { for k, m in module.additional_quality_scans : k => m.quality_scan_name },
+  )
+  description = "Map of Dataplex data profile and additional quality scan resource names."
 }
 
 output "quality_scan_id" {
@@ -41,6 +44,11 @@ output "quality_scan_id" {
 output "dataplex_quality_scan_id" {
   value       = module.dataplex_scans.dataplex_quality_scan_id
   description = "Alias of quality_scan_id for downstream orchestration stages."
+}
+
+output "additional_quality_scan_ids" {
+  value       = { for k, m in module.additional_quality_scans : k => m.quality_scan_id }
+  description = "Map of additional declarative Dataplex quality scan IDs."
 }
 
 output "ops_telemetry_dataset_id" {

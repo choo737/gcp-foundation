@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Read [AGENTS.md](AGENTS.md), [QUESTIONNAIRE.md](QUESTIONNAIRE.md), and [.agents/skills/setup-customer-foundation/SKILL.md](.agents/skills/setup-customer-foundation/SKILL.md) before running Terraform.
+Read [AGENTS.md](AGENTS.md), [QUESTIONNAIRE.md](QUESTIONNAIRE.md), [CODEOWNERS](CODEOWNERS), [docs/05-enterprise-operationalization-guide.md](docs/05-enterprise-operationalization-guide.md), and [.agents/skills/setup-customer-foundation/SKILL.md](.agents/skills/setup-customer-foundation/SKILL.md) before running Terraform.
 
 ## Quick Rules
 
