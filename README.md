@@ -4,7 +4,13 @@ Modular Google Cloud landing zone and Medallion data platform deployed with Terr
 
 ## Template Suite Overview
 
-This repository provides Day-0 and Day-1 infrastructure inside the four-repository `choo737` accelerator suite.
+<picture>
+  <source type="image/webp" srcset="assets/cloud-city-foundation.webp">
+  <img src="assets/cloud-city-foundation.gif" alt="Cloud City Layer 01 Foundation Architecture" width="100%">
+</picture>
+
+This repository builds **Layer 01**: granite bedrock, KMS wiring, and the Shared VPC power grid.
+It deploys City Hall IAM, Org Policies, the VPC-SC wall, and the audit bunker.
 
 | Repository | Lifecycle | Responsibility | Status |
 | --- | --- | --- | --- |
@@ -102,6 +108,7 @@ Create a private template repo first, link stages with scripts/link-stages.sh, a
 
 ## Repository Layout
 
+- `assets/`: Cloud City Layer 01 visual architecture animations.
 - `modules/foundation/`: Reusable five-file modules (`folder-hierarchy`, `project-factory`, `logging-guardrails`, `finops-governance`, `network-security`, `github-wif`, `monitoring-alerts`, `scc-secops`).
 - `modules/data/`: Reusable five-file modules (`governance-catalog`, `bigquery-dataset`, `bigquery-reservations`, `dataplex-scans`, `dataform-repository`).
 - `foundation/`: Runnable stages `00-bootstrap`, `01-org-governance`, and `02-security-network` with `envs/` templates.

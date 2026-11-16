@@ -153,11 +153,11 @@ class EnterpriseReadinessTest(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(res.returncode, 0, res.stderr)
-            exported = json.loads((gcs_store / "b" / "merged.json").read_text(encoding="utf-8"))
+            exported = json.loads((gcs_store / "b" / "staging" / "merged.json").read_text(encoding="utf-8"))
             self.assertEqual(exported, {"environment": "staging", "kms_key_id": "k1", "vpc_id": "v2"})
 
             res2 = subprocess.run(
-                [str(script_path), "--env", "prod", "--from-gcs", "gs://b/merged.json", str(dst)],
+                [str(script_path), "--env", "staging", "--from-gcs", "gs://b/merged.json", str(dst)],
                 env=env,
                 capture_output=True,
                 text=True,
@@ -165,7 +165,36 @@ class EnterpriseReadinessTest(unittest.TestCase):
             )
             self.assertEqual(res2.returncode, 0, res2.stderr)
             linked = json.loads((dst / "00_linked.auto.tfvars.json").read_text(encoding="utf-8"))
-            self.assertEqual(linked, {"environment": "prod", "kms_key_id": "k1", "vpc_id": "v2"})
+            self.assertEqual(linked, {"environment": "staging", "kms_key_id": "k1", "vpc_id": "v2"})
+
+            for raw_uri, expected_rel in (
+                ("gs://b", Path("b/dev/foundation-outputs.json")),
+                ("gs://b/foundation-outputs.json", Path("b/dev/foundation-outputs.json")),
+                ("gs://b/dev/foundation-outputs.json", Path("b/dev/foundation-outputs.json")),
+                ("gs://b/foundation-dev.json", Path("b/foundation-dev.json")),
+            ):
+                with self.subTest(uri=raw_uri):
+                    exp_res = subprocess.run(
+                        [str(script_path), "--env", "dev", "--export-gcs", raw_uri, str(src_a), str(src_b)],
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(exp_res.returncode, 0, exp_res.stderr)
+                    self.assertTrue((gcs_store / expected_rel).is_file(), f"Missing {expected_rel}")
+                    from_res = subprocess.run(
+                        [str(script_path), "--env", "dev", "--from-gcs", raw_uri, str(dst)],
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(from_res.returncode, 0, from_res.stderr)
+                    self.assertEqual(
+                        json.loads((dst / "00_linked.auto.tfvars.json").read_text(encoding="utf-8")),
+                        {"environment": "dev", "kms_key_id": "k1", "vpc_id": "v2"},
+                    )
 
     def test_vpc_sc_additive_resources_and_non_lockout(self) -> None:
         net_sec = (REPO_ROOT / "modules" / "foundation" / "network-security" / "main.tf").read_text(encoding="utf-8")
@@ -410,6 +439,37 @@ class EnterpriseReadinessTest(unittest.TestCase):
         self.assertIn('module "additional_quality_scans"', gov_main)
         self.assertIn("for_each = var.additional_quality_scans", gov_main)
         self.assertIn('output "additional_quality_scan_ids"', gov_outs)
+
+
+    def test_workflows_have_no_expression_interpolation_in_run_blocks(self) -> None:
+        workflow_files = sorted((REPO_ROOT / ".github" / "workflows").glob("*.yml"))
+        self.assertGreaterEqual(len(workflow_files), 1)
+        for wf_path in workflow_files:
+            wf_text = wf_path.read_text(encoding="utf-8")
+            in_run_block = False
+            run_indent = 0
+            for line_no, raw_line in enumerate(wf_text.splitlines(), start=1):
+                stripped = raw_line.lstrip()
+                indent = len(raw_line) - len(stripped)
+                if in_run_block:
+                    if stripped and indent <= run_indent:
+                        in_run_block = False
+                    else:
+                        self.assertNotIn(
+                            "${{",
+                            raw_line,
+                            f"{wf_path.name}:{line_no}: expression interpolation inside run: block",
+                        )
+                        continue
+                if re.match(r"^(?:-\s*)?run\s*:", stripped):
+                    self.assertNotIn(
+                        "${{",
+                        stripped,
+                        f"{wf_path.name}:{line_no}: expression interpolation inside run: line",
+                    )
+                    if stripped.rstrip().endswith(("|", ">", "|-", ">-")):
+                        in_run_block = True
+                        run_indent = indent
 
 
 if __name__ == "__main__":

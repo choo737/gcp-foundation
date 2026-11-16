@@ -87,8 +87,11 @@ class AgenticContextAndToolingTest(unittest.TestCase):
             "dp_" + "cp_",
         )
         skip_dirs = {".git", ".terraform", "__pycache__", ".pytest_cache"}
+        binary_exts = {".webp", ".gif", ".png", ".jpg", ".jpeg"}
         for path in sorted(REPO_ROOT.rglob("*")):
             if not path.is_file() or any(part in skip_dirs for part in path.parts):
+                continue
+            if path.suffix.lower() in binary_exts:
                 continue
             text = path.read_text(encoding="utf-8", errors="ignore").lower()
             rel = str(path.relative_to(REPO_ROOT))

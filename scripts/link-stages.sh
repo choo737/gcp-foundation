@@ -25,6 +25,10 @@ while [ "$#" -gt 0 ]; do
       env_name="$2"
       shift 2
       ;;
+    --env=*)
+      env_name="${1#--env=}"
+      shift
+      ;;
     --export-gcs)
       if [ "$#" -lt 2 ] || [ "$mode" != "local" ]; then
         usage
@@ -53,12 +57,19 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+if [ -n "$env_name" ]; then
+  if [[ ! "$env_name" =~ ^[a-z0-9][a-z0-9-]{0,30}$ ]]; then
+    echo "Invalid --env value: $env_name" >&2
+    exit 1
+  fi
+fi
+
 if [ "$mode" = "export-gcs" ]; then
   if [ "${#positional[@]}" -lt 1 ]; then
     usage
     exit 1
   fi
-  if [[ ! "$gcs_export_uri" =~ ^gs://[^/]+/.+ ]]; then
+  if [[ ! "$gcs_export_uri" =~ ^gs://[^/]+(/.*)?$ ]]; then
     echo "Invalid GCS URI: $gcs_export_uri" >&2
     exit 1
   fi
@@ -75,13 +86,47 @@ if [ "$mode" = "export-gcs" ]; then
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
 
-gcs_uri = sys.argv[1]
+raw_gcs_uri = sys.argv[1]
 env_name = sys.argv[2]
 source_dirs = [Path(p) for p in sys.argv[3:]]
+
+
+def resolve_env_gcs_uri(uri: str, env: str) -> str:
+    if not env:
+        return uri
+    rest = uri[len("gs://"):]
+    if "/" not in rest:
+        return f"gs://{rest}/{env}/foundation-outputs.json"
+    bucket, obj = rest.split("/", 1)
+    obj = obj.lstrip("/")
+    if not obj:
+        return f"gs://{bucket}/{env}/foundation-outputs.json"
+    parts = obj.split("/")
+    filename = parts[-1]
+    if env in parts[:-1]:
+        return uri
+    if filename and (
+        f"-{env}." in filename
+        or filename.startswith(f"{env}-")
+        or filename == f"{env}.json"
+    ):
+        return uri
+    if obj.endswith("/"):
+        return f"gs://{bucket}/{obj}{env}/foundation-outputs.json"
+    parent = "/".join(parts[:-1])
+    if parent:
+        return f"gs://{bucket}/{parent}/{env}/{filename}"
+    return f"gs://{bucket}/{env}/{filename}"
+
+
+gcs_uri = resolve_env_gcs_uri(raw_gcs_uri, env_name)
+if not re.match(r"^gs://[^/]+/.+", gcs_uri):
+    raise SystemExit(f"Invalid GCS URI (missing object path): {gcs_uri}")
 
 exported: dict[str, object] = {}
 for source_dir in source_dirs:
@@ -138,7 +183,7 @@ fi
 
 if [ "$mode" = "from-gcs" ]; then
   for uri in "${inputs[@]}"; do
-    if [[ ! "$uri" =~ ^gs://[^/]+/.+ ]]; then
+    if [[ ! "$uri" =~ ^gs://[^/]+(/.*)?$ ]]; then
       echo "Invalid GCS URI: $uri" >&2
       exit 1
     fi
@@ -169,13 +214,45 @@ out_file = Path(sys.argv[3])
 env_name = sys.argv[4]
 sources = sys.argv[5:]
 
+
+def resolve_env_gcs_uri(uri: str, env: str) -> str:
+    if not env:
+        return uri
+    rest = uri[len("gs://"):]
+    if "/" not in rest:
+        return f"gs://{rest}/{env}/foundation-outputs.json"
+    bucket, obj = rest.split("/", 1)
+    obj = obj.lstrip("/")
+    if not obj:
+        return f"gs://{bucket}/{env}/foundation-outputs.json"
+    parts = obj.split("/")
+    filename = parts[-1]
+    if env in parts[:-1]:
+        return uri
+    if filename and (
+        f"-{env}." in filename
+        or filename.startswith(f"{env}-")
+        or filename == f"{env}.json"
+    ):
+        return uri
+    if obj.endswith("/"):
+        return f"gs://{bucket}/{obj}{env}/foundation-outputs.json"
+    parent = "/".join(parts[:-1])
+    if parent:
+        return f"gs://{bucket}/{parent}/{env}/{filename}"
+    return f"gs://{bucket}/{env}/{filename}"
+
+
 var_re = re.compile(r'^\s*variable\s+"([A-Za-z0-9_]+)"\s*\{', re.MULTILINE)
 declared_vars = set(var_re.findall((target_dir / "variables.tf").read_text(encoding="utf-8")))
 
 merged: dict[str, object] = {}
 
 if mode == "from-gcs":
-    for gcs_uri in sources:
+    for raw_uri in sources:
+        gcs_uri = resolve_env_gcs_uri(raw_uri, env_name)
+        if not re.match(r"^gs://[^/]+/.+", gcs_uri):
+            raise SystemExit(f"Invalid GCS URI (missing object path): {gcs_uri}")
         raw = subprocess.check_output(
             ["gcloud", "storage", "cat", gcs_uri],
             text=True,
