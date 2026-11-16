@@ -6,11 +6,11 @@ Modular Google Cloud landing zone and Medallion data platform deployed with Terr
 
 <picture>
   <source type="image/webp" srcset="assets/cloud-city-foundation.webp">
-  <img src="assets/cloud-city-foundation.gif" alt="Cloud City Layer 01 Foundation Architecture" width="100%">
+  <img src="assets/cloud-city-foundation.gif" alt="Layer 01 foundation overview" width="100%">
 </picture>
 
-This repository builds **Layer 01**: granite bedrock, KMS wiring, and the Shared VPC power grid.
-It deploys City Hall IAM, Org Policies, the VPC-SC wall, and the audit bunker.
+`gcp-foundation` owns **Layer 01**: folders, IAM, 36 Org Policies, KMS keys, and Shared VPC networking.
+It also sets up VPC Service Controls, Security Command Center, and locked audit log sinks.
 
 | Repository | Lifecycle | Responsibility | Status |
 | --- | --- | --- | --- |
