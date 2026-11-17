@@ -167,6 +167,78 @@ variable "vpc_sc_access_level_members" {
   description = "Optional IAM members for an ACM access level attached to the VPC-SC perimeter."
 }
 
+variable "enable_hierarchical_firewall_policy" {
+  type        = bool
+  default     = false
+  description = "Whether to create and associate a folder-level hierarchical firewall policy."
+}
+
+variable "firewall_policy_folder_id" {
+  type        = string
+  default     = ""
+  description = "Folder resource ID (folders/<id> or numeric) attached to the hierarchical firewall policy."
+}
+
+variable "enable_ngfw_standard_rules" {
+  type        = bool
+  default     = true
+  description = "Whether to enable NGFW Standard threat intelligence deny rules on folder and VPC policies."
+}
+
+variable "threat_intelligence_lists" {
+  type        = list(string)
+  default     = ["iplist-known-malicious-ips", "iplist-tor-exit-nodes", "iplist-crypto-miners"]
+  description = "Google threat intelligence feed names blocked at ingress and egress."
+}
+
+variable "enable_iap_ssh_ingress" {
+  type        = bool
+  default     = true
+  description = "Whether to permit IAP TCP forwarding (35.235.240.0/20 on ports 22 and 3389)."
+}
+
+variable "enable_secure_tags" {
+  type        = bool
+  default     = true
+  description = "Whether to create IAM-governed GCE_FIREWALL secure tags for NGFW policies."
+}
+
+variable "allowed_egress_fqdns" {
+  type        = list(string)
+  default     = []
+  description = "Optional list of external FQDNs permitted on HTTPS egress in the VPC firewall policy."
+}
+
+variable "enable_ngfw_enterprise" {
+  type        = bool
+  default     = false
+  description = "Whether to opt into NGFW Enterprise zonal firewall endpoints and threat prevention profiles."
+}
+
+variable "organization_id" {
+  type        = string
+  default     = ""
+  description = "Organization ID (organizations/<id> or <id>) required when enable_ngfw_enterprise is true."
+}
+
+variable "ngfw_enterprise_zones" {
+  type        = list(string)
+  default     = []
+  description = "Zones for NGFW Enterprise firewall endpoints (defaults to <region>-a and <region>-b)."
+}
+
+variable "enable_ngfw_tls_inspection" {
+  type        = bool
+  default     = false
+  description = "Whether NGFW Enterprise rules inspect TLS traffic using ngfw_tls_inspection_policy_id."
+}
+
+variable "ngfw_tls_inspection_policy_id" {
+  type        = string
+  default     = ""
+  description = "Optional TLS inspection policy resource ID bound to NGFW Enterprise endpoint associations."
+}
+
 variable "labels" {
   type        = map(string)
   default     = {}

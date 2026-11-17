@@ -3,14 +3,28 @@ output "scc_tier" {
   description = "Active Security Command Center tier (NONE, STANDARD, or PREMIUM)."
 }
 
+output "scc_scope" {
+  value       = var.scc_scope
+  description = "Configured Security Command Center scope (FOLDER or PROJECT)."
+}
+
 output "scc_findings_dataset_id" {
   value       = try(google_bigquery_dataset.scc_findings[0].dataset_id, null)
   description = "Regional BigQuery dataset ID storing exported SCC v2 findings, or null."
 }
 
 output "scc_big_query_export_name" {
-  value       = try(google_scc_v2_folder_scc_big_query_export.active_findings[0].name, null)
+  value = (
+    local.is_folder_scope
+    ? try(google_scc_v2_folder_scc_big_query_export.active_findings[0].name, null)
+    : try(values(google_scc_v2_project_scc_big_query_export.project_active_findings)[0].name, null)
+  )
   description = "SCC v2 continuous BigQuery export resource name, or null."
+}
+
+output "scc_project_big_query_export_names" {
+  value       = { for k, v in google_scc_v2_project_scc_big_query_export.project_active_findings : k => v.name }
+  description = "Map of project IDs to project-scoped SCC v2 BigQuery export resource names."
 }
 
 output "scc_findings_topic_id" {
@@ -20,7 +34,7 @@ output "scc_findings_topic_id" {
 
 output "scc_findings_subscription_id" {
   value       = try(google_pubsub_subscription.scc_findings_alert[0].id, null)
-  description = "Pub/Sub pull subscription ID monitored for unacknowledged SCC findings, or null."
+  description = "Pub/Sub subscription ID receiving HIGH and CRITICAL SCC findings, or null."
 }
 
 output "scc_alert_policy_name" {
@@ -34,11 +48,20 @@ output "scc_mute_config_ids" {
 }
 
 output "scc_custom_sha_module_ids" {
-  value = compact([
-    try(google_scc_management_folder_security_health_analytics_custom_module.prod_bq_cmek[0].name, ""),
-    try(google_scc_management_folder_security_health_analytics_custom_module.gcs_ubla[0].name, ""),
-  ])
+  value = compact(concat(
+    [
+      try(google_scc_management_folder_security_health_analytics_custom_module.prod_bq_cmek[0].name, ""),
+      try(google_scc_management_folder_security_health_analytics_custom_module.gcs_ubla[0].name, ""),
+    ],
+    [for m in values(google_scc_management_project_security_health_analytics_custom_module.project_prod_bq_cmek) : m.name],
+    [for m in values(google_scc_management_project_security_health_analytics_custom_module.project_gcs_ubla) : m.name],
+  ))
   description = "Custom Security Health Analytics module resource names deployed in PREMIUM tier."
+}
+
+output "scc_custom_etd_module_id" {
+  value       = try(google_scc_management_organization_event_threat_detection_custom_module.this[0].name, null)
+  description = "Organization Event Threat Detection custom module resource name, or null."
 }
 
 output "scc_posture_id" {

@@ -49,6 +49,7 @@ EXPECTED_MODULES = frozenset({
     "modules/foundation/project-factory",
     "modules/foundation/logging-guardrails",
     "modules/foundation/finops-governance",
+    "modules/foundation/backup-dr",
     "modules/foundation/network-security",
     "modules/foundation/github-wif",
     "modules/foundation/monitoring-alerts",
@@ -133,7 +134,7 @@ def _discover_runnable_roots() -> list[Path]:
 
 
 class RepoSymmetryTest(unittest.TestCase):
-    """Validate 13 five-file modules, 6 runnable roots, lockfiles, and version pins."""
+    """Validate 14 five-file modules, 6 runnable roots, lockfiles, and version pins."""
 
     def test_modules_obey_five_file_contract(self) -> None:
         modules = _discover_modules()

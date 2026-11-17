@@ -125,7 +125,8 @@ locals {
     { for k, m in module.data_domain : "domain_${k}" => m.project_id },
   )
 
-  env_labels = merge(var.labels, { environment = var.environment })
+  env_labels              = merge(var.labels, { environment = var.environment })
+  landing_bucket_location = var.enable_dual_region_gcs ? (startswith(var.region, "europe-") ? "EU" : upper(split("-", var.region)[0])) : var.region
 }
 
 resource "terraform_data" "validate_primary_domain" {
@@ -138,6 +139,11 @@ resource "terraform_data" "validate_primary_domain" {
     precondition {
       condition     = !local.create_subfolders || local.parent_folder != ""
       error_message = "Provide environment_storage_folder_ids/environment_compute_folder_ids, storage_folder_id/compute_folder_id, or data_folder_id."
+    }
+
+    precondition {
+      condition     = !var.enable_dual_region_gcs || length(var.dual_region_data_locations) == 2
+      error_message = "dual_region_data_locations must contain exactly 2 regions when enable_dual_region_gcs is true."
     }
   }
 }
@@ -531,7 +537,8 @@ module "governance_catalog" {
 resource "google_storage_bucket" "landing" {
   project                     = module.data_core.project_id
   name                        = "${module.data_core.project_id}-landing"
-  location                    = var.region
+  location                    = local.landing_bucket_location
+  rpo                         = var.enable_dual_region_gcs ? var.gcs_rpo : null
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
   force_destroy               = var.delete_contents_on_destroy
@@ -539,6 +546,17 @@ resource "google_storage_bucket" "landing" {
 
   versioning {
     enabled = true
+  }
+
+  soft_delete_policy {
+    retention_duration_seconds = var.soft_delete_retention_seconds
+  }
+
+  dynamic "custom_placement_config" {
+    for_each = var.enable_dual_region_gcs ? [1] : []
+    content {
+      data_locations = var.dual_region_data_locations
+    }
   }
 
   lifecycle_rule {
@@ -693,22 +711,25 @@ module "reservations" {
 
   reservations = {
     etl = {
-      edition           = "ENTERPRISE"
-      slot_capacity     = var.etl_baseline_slots != null ? var.etl_baseline_slots : var.baseline_slots
-      ignore_idle_slots = false
-      max_slots         = var.etl_max_slots != null ? var.etl_max_slots : var.max_slots
+      edition            = var.reservation_edition
+      slot_capacity      = var.etl_baseline_slots != null ? var.etl_baseline_slots : var.baseline_slots
+      ignore_idle_slots  = false
+      max_slots          = var.etl_max_slots != null ? var.etl_max_slots : var.max_slots
+      secondary_location = var.reservation_secondary_location
     }
     bi = {
-      edition           = "ENTERPRISE"
-      slot_capacity     = var.bi_baseline_slots != null ? var.bi_baseline_slots : var.baseline_slots
-      ignore_idle_slots = false
-      max_slots         = var.bi_max_slots != null ? var.bi_max_slots : var.max_slots
+      edition            = var.reservation_edition
+      slot_capacity      = var.bi_baseline_slots != null ? var.bi_baseline_slots : var.baseline_slots
+      ignore_idle_slots  = false
+      max_slots          = var.bi_max_slots != null ? var.bi_max_slots : var.max_slots
+      secondary_location = var.reservation_secondary_location
     }
     adhoc = {
-      edition           = "ENTERPRISE"
-      slot_capacity     = var.adhoc_baseline_slots != null ? var.adhoc_baseline_slots : var.baseline_slots
-      ignore_idle_slots = false
-      max_slots         = var.adhoc_max_slots != null ? var.adhoc_max_slots : var.max_slots
+      edition            = var.reservation_edition
+      slot_capacity      = var.adhoc_baseline_slots != null ? var.adhoc_baseline_slots : var.baseline_slots
+      ignore_idle_slots  = false
+      max_slots          = var.adhoc_max_slots != null ? var.adhoc_max_slots : var.max_slots
+      secondary_location = var.reservation_secondary_location
     }
   }
 

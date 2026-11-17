@@ -9,6 +9,23 @@ variable "scc_tier" {
   }
 }
 
+variable "scc_scope" {
+  type        = string
+  default     = "FOLDER"
+  description = "SCC activation scope (FOLDER for org/folder hierarchy or PROJECT for standalone PAYG project export and alerts)."
+
+  validation {
+    condition     = contains(["FOLDER", "PROJECT"], var.scc_scope)
+    error_message = "scc_scope must be FOLDER or PROJECT."
+  }
+}
+
+variable "scc_target_project_ids" {
+  type        = list(string)
+  default     = []
+  description = "Target project IDs wired when scc_scope is PROJECT (defaults to [audit_project_id] when empty)."
+}
+
 variable "scc_location" {
   type        = string
   default     = "global"
@@ -74,7 +91,13 @@ variable "delete_contents_on_destroy" {
 variable "alert_email_addresses" {
   type        = list(string)
   default     = []
-  description = "Email addresses notified when unacknowledged HIGH or CRITICAL SCC findings arrive."
+  description = "Email addresses notified when HIGH or CRITICAL SCC findings arrive."
+}
+
+variable "siem_push_endpoint" {
+  type        = string
+  default     = ""
+  description = "Optional HTTPS SIEM webhook URL wired as a Pub/Sub push_config on the SCC findings subscription."
 }
 
 variable "enable_bigquery_export" {
@@ -101,6 +124,30 @@ variable "enable_custom_sha_modules" {
   description = "Whether PREMIUM tier deploys Custom Security Health Analytics CEL modules."
 }
 
+variable "enable_custom_etd_module" {
+  type        = bool
+  default     = false
+  description = "Whether PREMIUM tier deploys an organization-level Event Threat Detection custom module."
+}
+
+variable "custom_etd_display_name" {
+  type        = string
+  default     = ""
+  description = "Optional display name for the Event Threat Detection custom module."
+}
+
+variable "custom_etd_type" {
+  type        = string
+  default     = "CONFIGURABLE_BAD_DOMAIN"
+  description = "Event Threat Detection custom module template type (for example CONFIGURABLE_BAD_DOMAIN or CONFIGURABLE_BAD_IP)."
+}
+
+variable "custom_etd_config_json" {
+  type        = string
+  default     = ""
+  description = "JSON configuration string for the Event Threat Detection custom module."
+}
+
 variable "enable_security_posture" {
   type        = bool
   default     = false
@@ -110,7 +157,7 @@ variable "enable_security_posture" {
 variable "organization_id" {
   type        = string
   default     = ""
-  description = "Organization ID (organizations/<id> or <id>) required when enable_security_posture is true in PREMIUM."
+  description = "Organization ID (organizations/<id> or <id>) required when enable_security_posture or enable_custom_etd_module is true."
 }
 
 variable "labels" {

@@ -4,7 +4,7 @@ This module provisions autoscaling BigQuery slot reservations and assigns query 
 
 ## Resources Managed
 
-- `google_bigquery_reservation` with optional autoscaling and zero baseline slots by default.
+- `google_bigquery_reservation` with optional autoscaling, zero baseline slots, and optional `secondary_location` (`ENTERPRISE_PLUS`).
 - `google_bigquery_reservation_assignment` binding target project IDs with `job_type = "QUERY"`.
 
 ## Usage

@@ -240,6 +240,84 @@ variable "finops_tag_value_ids" {
   description = "Optional Resource Manager FinOps tag value IDs linked from stage 01."
 }
 
+variable "enable_hierarchical_firewall_policy" {
+  type        = bool
+  default     = false
+  description = "Whether to attach a folder-level hierarchical firewall policy to environment_folder_ids[environment]."
+}
+
+variable "enable_ngfw_standard_rules" {
+  type        = bool
+  default     = true
+  description = "Whether to enforce NGFW Standard threat intelligence deny rules on folder and VPC policies."
+}
+
+variable "threat_intelligence_lists" {
+  type        = list(string)
+  default     = ["iplist-known-malicious-ips", "iplist-tor-exit-nodes", "iplist-crypto-miners"]
+  description = "Google threat intelligence feed names blocked at ingress and egress."
+}
+
+variable "enable_iap_ssh_ingress" {
+  type        = bool
+  default     = true
+  description = "Whether to permit IAP TCP forwarding (35.235.240.0/20 on ports 22 and 3389)."
+}
+
+variable "enable_secure_tags" {
+  type        = bool
+  default     = true
+  description = "Whether to create IAM-governed GCE_FIREWALL secure tags for NGFW policies."
+}
+
+variable "allowed_egress_fqdns" {
+  type        = list(string)
+  default     = []
+  description = "Optional list of external FQDNs permitted on HTTPS egress in the VPC firewall policy."
+}
+
+variable "enable_ngfw_enterprise" {
+  type        = bool
+  default     = false
+  description = "Whether to opt into NGFW Enterprise zonal firewall endpoints and threat prevention profiles."
+}
+
+variable "organization_id" {
+  type        = string
+  default     = ""
+  description = "Organization ID (organizations/<id> or <id>) required when enable_ngfw_enterprise is true."
+}
+
+variable "ngfw_enterprise_zones" {
+  type        = list(string)
+  default     = []
+  description = "Zones for NGFW Enterprise firewall endpoints (defaults to <region>-a and <region>-b)."
+}
+
+variable "enable_ngfw_tls_inspection" {
+  type        = bool
+  default     = false
+  description = "Whether NGFW Enterprise rules inspect TLS traffic."
+}
+
+variable "ngfw_tls_inspection_policy_id" {
+  type        = string
+  default     = ""
+  description = "Optional TLS inspection policy resource ID for NGFW Enterprise endpoint associations."
+}
+
+variable "backup_project_id" {
+  type        = string
+  default     = ""
+  description = "Optional Backup and DR project ID propagated from stage 01."
+}
+
+variable "backup_vault_id" {
+  type        = string
+  default     = ""
+  description = "Optional Backup and DR vault resource ID propagated from stage 01."
+}
+
 variable "labels" {
   type = map(string)
   default = {

@@ -62,6 +62,8 @@ class AgenticContextAndToolingTest(unittest.TestCase):
         project_prefix_len = max_prefix + 1 + max_suffix
         suffixes = (
             "-audit",
+            "-cmn-finops",
+            "-cmn-backup",
             "-network",
             "-data-gov",
             "-data-core",

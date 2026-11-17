@@ -203,6 +203,10 @@ resource "google_storage_bucket" "landing" {
     enabled = true
   }
 
+  soft_delete_policy {
+    retention_duration_seconds = var.soft_delete_retention_seconds
+  }
+
   lifecycle_rule {
     condition {
       age            = 90

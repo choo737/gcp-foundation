@@ -49,10 +49,10 @@ flowchart LR
 | Path 2: Brownfield | Existing `data-platform` folder | `data/enterprise/01-platform` -> `data/enterprise/02-governance-ops` |
 | Path 3: Sandbox | One existing GCP project | `data/sandbox` |
 
-- **Bootstrap & WIF**: Provisions hardened `tfstate` and `iac-outputs` buckets plus repo-scoped keyless GitHub Actions WIF.
-- **Org Governance & SecOps**: Deploys `02-environments`, locked audit logs (`2555` days), liens, FinOps budgets, 36 Org Policies, and SCC (`NONE`/`STANDARD`/`PREMIUM`).
-- **Security & Network**: Configures HSM CMEK, Shared VPC, Flow Logs, DNS logging, Datastream PSC, and staged VPC-SC.
-- **Enterprise Data Platform**: Separates governance, core storage, domain Gold marts, ETL compute, and BI compute with BigQuery slots.
+- **Bootstrap & WIF**: Provisions hardened `tfstate` and `iac-outputs` buckets with soft delete plus keyless GitHub Actions WIF.
+- **Org Governance & SecOps**: Deploys `02-environments`, locked logs, Stage-01 CMEK, FinOps, Backup & DR, 36 Org Policies, and SCC.
+- **Security & Network**: Configures HSM CMEK, Shared VPC, Cloud NGFW folder/VPC policies, `GCE_FIREWALL` secure tags, PSC, and VPC-SC.
+- **Enterprise Data Platform**: Separates governance, storage, and compute with BigQuery DR reservations and dual-region GCS options.
 
 ## 6-Step Enterprise Operationalization
 
@@ -109,12 +109,12 @@ Create a private template repo first, link stages with scripts/link-stages.sh, a
 ## Repository Layout
 
 - `assets/`: Cloud City Layer 01 visual architecture animations.
-- `modules/foundation/`: Reusable five-file modules (`folder-hierarchy`, `project-factory`, `logging-guardrails`, `finops-governance`, `network-security`, `github-wif`, `monitoring-alerts`, `scc-secops`).
+- `modules/foundation/`: Reusable five-file modules (`folder-hierarchy`, `project-factory`, `logging-guardrails`, `finops-governance`, `backup-dr`, `network-security`, `github-wif`, `monitoring-alerts`, `scc-secops`).
 - `modules/data/`: Reusable five-file modules (`governance-catalog`, `bigquery-dataset`, `bigquery-reservations`, `dataplex-scans`, `dataform-repository`).
 - `foundation/`: Runnable stages `00-bootstrap`, `01-org-governance`, and `02-security-network` with `envs/` templates.
 - `data/sandbox/`: Single-project Medallion deployment root for rapid validation.
 - `data/enterprise/`: Two-stage enterprise data platform (`01-platform` and `02-governance-ops`) with `envs/` templates.
-- `scripts/link-stages.sh`: Links Terraform outputs locally or via GCS into `00_linked.auto.tfvars.json` with `--env` support.
+- `scripts/`: `link-stages.sh` for stage linking plus `configure-bq-dr-replica.sh` and `verify-scc-detectors.sh` for Day-2 ops.
 - `QUESTIONNAIRE.md`: Tier-2 intake form mapping compliance, SCC, VPC-SC, FinOps, and slot choices to `.tfvars`.
 - `CODEOWNERS`: Enforces `@choo737` review ownership across foundation, data, module, and workflow paths.
 - `docs/`: Architecture, entry points, Cloudera mapping, decommission playbook, and enterprise operationalization guide.

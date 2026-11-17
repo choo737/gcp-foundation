@@ -75,6 +75,10 @@ resource "google_storage_bucket" "tfstate" {
     enabled = true
   }
 
+  soft_delete_policy {
+    retention_duration_seconds = var.soft_delete_retention_seconds
+  }
+
   lifecycle_rule {
     condition {
       days_since_noncurrent_time = 90
@@ -99,6 +103,10 @@ resource "google_storage_bucket" "iac_outputs" {
 
   versioning {
     enabled = true
+  }
+
+  soft_delete_policy {
+    retention_duration_seconds = var.soft_delete_retention_seconds
   }
 
   lifecycle_rule {

@@ -21,10 +21,11 @@ variable "bi_project_id" {
 
 variable "reservations" {
   type = map(object({
-    edition           = optional(string, "ENTERPRISE")
-    slot_capacity     = optional(number, 0)
-    ignore_idle_slots = optional(bool, false)
-    max_slots         = optional(number, 100)
+    edition            = optional(string, "ENTERPRISE")
+    slot_capacity      = optional(number, 0)
+    ignore_idle_slots  = optional(bool, false)
+    max_slots          = optional(number, 100)
+    secondary_location = optional(string, "")
   }))
   default     = {}
   description = "Map of BigQuery reservations keyed by short reservation name."

@@ -2,16 +2,26 @@ locals {
   enable_standard = contains(["STANDARD", "PREMIUM"], var.scc_tier)
   enable_premium  = var.scc_tier == "PREMIUM"
 
-  numeric_folder_id    = replace(var.folder_id, "folders/", "")
-  trimmed_kms_key_id   = var.kms_key_id != null ? trimspace(var.kms_key_id) : ""
-  effective_kms_key_id = local.trimmed_kms_key_id
-  trimmed_org_id       = var.organization_id != null ? trimspace(var.organization_id) : ""
-  numeric_org_id       = replace(local.trimmed_org_id, "organizations/", "")
+  is_folder_scope  = var.scc_scope == "FOLDER"
+  is_project_scope = var.scc_scope == "PROJECT"
+
+  numeric_folder_id     = replace(var.folder_id, "folders/", "")
+  trimmed_kms_key_id    = var.kms_key_id != null ? trimspace(var.kms_key_id) : ""
+  effective_kms_key_id  = local.trimmed_kms_key_id
+  trimmed_org_id        = var.organization_id != null ? trimspace(var.organization_id) : ""
+  numeric_org_id        = replace(local.trimmed_org_id, "organizations/", "")
+  trimmed_siem_push_url = var.siem_push_endpoint != null ? trimspace(var.siem_push_endpoint) : ""
+  trimmed_etd_config    = var.custom_etd_config_json != null ? trimspace(var.custom_etd_config_json) : ""
+  trimmed_etd_name      = var.custom_etd_display_name != null ? trimspace(var.custom_etd_display_name) : ""
+  effective_etd_name    = local.trimmed_etd_name != "" ? local.trimmed_etd_name : "${replace(var.prefix, "-", "_")}_custom_etd_detector"
+
+  clean_target_projects = distinct(compact([for p in var.scc_target_project_ids : trimspace(p)]))
+  effective_project_ids = local.is_project_scope ? (length(local.clean_target_projects) > 0 ? local.clean_target_projects : [var.audit_project_id]) : []
 
   prod_folder_raw = lookup(var.environment_folder_ids, "prod", "")
   prod_folder_id  = trimspace(local.prod_folder_raw) != "" ? replace(trimspace(local.prod_folder_raw), "folders/", "") : local.numeric_folder_id
 
-  nonprod_mute_folders = local.enable_standard && var.enable_nonprod_mute_rules ? {
+  nonprod_mute_folders = local.enable_standard && var.enable_nonprod_mute_rules && local.is_folder_scope ? {
     for env, fid in var.environment_folder_ids :
     env => replace(trimspace(fid), "folders/", "")
     if contains(var.nonprod_mute_environments, env) && trimspace(fid) != ""
@@ -27,6 +37,11 @@ resource "terraform_data" "validate_security_posture" {
     precondition {
       condition     = !(local.enable_premium && var.enable_security_posture) || local.numeric_org_id != ""
       error_message = "organization_id is required when enable_security_posture is true in PREMIUM tier."
+    }
+
+    precondition {
+      condition     = !(local.enable_premium && var.enable_custom_etd_module) || (local.numeric_org_id != "" && local.trimmed_etd_config != "")
+      error_message = "organization_id and custom_etd_config_json are required when enable_custom_etd_module is true."
     }
   }
 }
@@ -52,7 +67,7 @@ resource "google_bigquery_dataset" "scc_findings" {
 }
 
 resource "google_scc_v2_folder_scc_big_query_export" "active_findings" {
-  count = local.enable_standard && var.enable_bigquery_export ? 1 : 0
+  count = local.enable_standard && var.enable_bigquery_export && local.is_folder_scope ? 1 : 0
 
   big_query_export_id = "${var.prefix}-scc-bq-export"
   folder              = local.numeric_folder_id
@@ -63,12 +78,32 @@ resource "google_scc_v2_folder_scc_big_query_export" "active_findings" {
 }
 
 resource "google_bigquery_dataset_iam_member" "scc_export_writer" {
-  count = local.enable_standard && var.enable_bigquery_export ? 1 : 0
+  count = local.enable_standard && var.enable_bigquery_export && local.is_folder_scope ? 1 : 0
 
   project    = var.audit_project_id
   dataset_id = google_bigquery_dataset.scc_findings[0].dataset_id
   role       = "roles/bigquery.dataEditor"
   member     = startswith(google_scc_v2_folder_scc_big_query_export.active_findings[0].principal, "serviceAccount:") ? google_scc_v2_folder_scc_big_query_export.active_findings[0].principal : "serviceAccount:${google_scc_v2_folder_scc_big_query_export.active_findings[0].principal}"
+}
+
+resource "google_scc_v2_project_scc_big_query_export" "project_active_findings" {
+  for_each = local.enable_standard && var.enable_bigquery_export && local.is_project_scope ? toset(local.effective_project_ids) : toset([])
+
+  big_query_export_id = substr("${var.prefix}-${replace(each.value, "_", "-")}-scc-bq", 0, 63)
+  project             = each.value
+  location            = var.scc_location
+  dataset             = "projects/${var.audit_project_id}/datasets/${google_bigquery_dataset.scc_findings[0].dataset_id}"
+  filter              = "state=\"ACTIVE\" AND NOT mute=\"MUTED\""
+  description         = "Continuous project-scoped export of active unmuted SCC v2 findings to regional BigQuery."
+}
+
+resource "google_bigquery_dataset_iam_member" "scc_project_export_writer" {
+  for_each = local.enable_standard && var.enable_bigquery_export && local.is_project_scope ? toset(local.effective_project_ids) : toset([])
+
+  project    = var.audit_project_id
+  dataset_id = google_bigquery_dataset.scc_findings[0].dataset_id
+  role       = "roles/bigquery.dataEditor"
+  member     = startswith(google_scc_v2_project_scc_big_query_export.project_active_findings[each.key].principal, "serviceAccount:") ? google_scc_v2_project_scc_big_query_export.project_active_findings[each.key].principal : "serviceAccount:${google_scc_v2_project_scc_big_query_export.project_active_findings[each.key].principal}"
 }
 
 resource "google_pubsub_topic" "scc_findings" {
@@ -89,16 +124,37 @@ resource "google_pubsub_subscription" "scc_findings_alert" {
   message_retention_duration = "604800s"
   ack_deadline_seconds       = 60
   labels                     = var.labels
+
+  dynamic "push_config" {
+    for_each = local.trimmed_siem_push_url != "" ? [local.trimmed_siem_push_url] : []
+    content {
+      push_endpoint = push_config.value
+    }
+  }
 }
 
 resource "google_scc_v2_folder_notification_config" "high_critical" {
-  count = local.enable_standard && var.enable_pubsub_notifications ? 1 : 0
+  count = local.enable_standard && var.enable_pubsub_notifications && local.is_folder_scope ? 1 : 0
 
   config_id    = "${var.prefix}-scc-high-crit"
   folder       = local.numeric_folder_id
   location     = var.scc_location
   pubsub_topic = google_pubsub_topic.scc_findings[0].id
   description  = "Stream active unmuted HIGH and CRITICAL SCC findings to Pub/Sub."
+
+  streaming_config {
+    filter = "(severity=\"HIGH\" OR severity=\"CRITICAL\") AND state=\"ACTIVE\" AND NOT mute=\"MUTED\""
+  }
+}
+
+resource "google_scc_v2_project_notification_config" "project_high_critical" {
+  for_each = local.enable_standard && var.enable_pubsub_notifications && local.is_project_scope ? toset(local.effective_project_ids) : toset([])
+
+  config_id    = substr("${var.prefix}-scc-hc-${replace(each.value, "_", "-")}", 0, 63)
+  project      = each.value
+  location     = var.scc_location
+  pubsub_topic = google_pubsub_topic.scc_findings[0].id
+  description  = "Stream project-scoped active unmuted HIGH and CRITICAL SCC findings to Pub/Sub."
 
   streaming_config {
     filter = "(severity=\"HIGH\" OR severity=\"CRITICAL\") AND state=\"ACTIVE\" AND NOT mute=\"MUTED\""
@@ -132,30 +188,34 @@ resource "google_monitoring_alert_policy" "scc_unacked_findings" {
   count = local.enable_standard && var.enable_pubsub_notifications ? 1 : 0
 
   project               = var.audit_project_id
-  display_name          = "${var.prefix} SCC High and Critical Unacked Findings"
+  display_name          = "${var.prefix} SCC High and Critical Findings Published"
   combiner              = "OR"
   notification_channels = local.alert_channel_ids
   user_labels           = var.labels
 
+  alert_strategy {
+    auto_close = "1800s"
+  }
+
   conditions {
-    display_name = "Unacknowledged SCC high or critical findings > 0"
+    display_name = "SCC high or critical finding published to Pub/Sub topic > 0"
 
     condition_threshold {
-      filter          = "metric.type=\"pubsub.googleapis.com/subscription/num_undelivered_messages\" AND resource.type=\"pubsub_subscription\" AND resource.labels.subscription_id=\"${google_pubsub_subscription.scc_findings_alert[0].name}\""
+      filter          = "metric.type=\"pubsub.googleapis.com/topic/send_message_operation_count\" AND resource.type=\"pubsub_topic\" AND resource.labels.topic_id=\"${google_pubsub_topic.scc_findings[0].name}\""
       comparison      = "COMPARISON_GT"
       threshold_value = 0
       duration        = "0s"
 
       aggregations {
         alignment_period   = "60s"
-        per_series_aligner = "ALIGN_MAX"
+        per_series_aligner = "ALIGN_SUM"
       }
     }
   }
 }
 
 resource "google_scc_management_folder_security_health_analytics_custom_module" "prod_bq_cmek" {
-  count = local.enable_premium && var.enable_custom_sha_modules ? 1 : 0
+  count = local.enable_premium && var.enable_custom_sha_modules && local.is_folder_scope ? 1 : 0
 
   folder           = local.prod_folder_id
   location         = "global"
@@ -179,7 +239,7 @@ resource "google_scc_management_folder_security_health_analytics_custom_module" 
 }
 
 resource "google_scc_management_folder_security_health_analytics_custom_module" "gcs_ubla" {
-  count = local.enable_premium && var.enable_custom_sha_modules ? 1 : 0
+  count = local.enable_premium && var.enable_custom_sha_modules && local.is_folder_scope ? 1 : 0
 
   folder           = local.numeric_folder_id
   location         = "global"
@@ -200,6 +260,67 @@ resource "google_scc_management_folder_security_health_analytics_custom_module" 
       title      = "Uniform Bucket-Level Access Disabled"
     }
   }
+}
+
+resource "google_scc_management_project_security_health_analytics_custom_module" "project_prod_bq_cmek" {
+  for_each = local.enable_premium && var.enable_custom_sha_modules && local.is_project_scope ? toset(local.effective_project_ids) : toset([])
+
+  project          = each.value
+  location         = "global"
+  display_name     = "${replace(var.prefix, "-", "_")}_proj_bq_cmek_required"
+  enablement_state = "ENABLED"
+
+  custom_config {
+    severity       = "HIGH"
+    description    = "BigQuery datasets must enforce customer-managed encryption keys (CMEK)."
+    recommendation = "Configure default_encryption_configuration.kms_key_name on the BigQuery dataset."
+
+    resource_selector {
+      resource_types = ["bigquery.googleapis.com/Dataset"]
+    }
+
+    predicate {
+      expression = "!has(resource.defaultEncryptionConfiguration) || resource.defaultEncryptionConfiguration.kmsKeyName == \"\""
+      title      = "Missing BigQuery Dataset CMEK"
+    }
+  }
+}
+
+resource "google_scc_management_project_security_health_analytics_custom_module" "project_gcs_ubla" {
+  for_each = local.enable_premium && var.enable_custom_sha_modules && local.is_project_scope ? toset(local.effective_project_ids) : toset([])
+
+  project          = each.value
+  location         = "global"
+  display_name     = "${replace(var.prefix, "-", "_")}_proj_gcs_uniform_access_required"
+  enablement_state = "ENABLED"
+
+  custom_config {
+    severity       = "HIGH"
+    description    = "Cloud Storage buckets must enable Uniform Bucket-Level Access."
+    recommendation = "Enable uniform_bucket_level_access on the Cloud Storage bucket."
+
+    resource_selector {
+      resource_types = ["storage.googleapis.com/Bucket"]
+    }
+
+    predicate {
+      expression = "!has(resource.iamConfiguration) || !has(resource.iamConfiguration.uniformBucketLevelAccess) || !resource.iamConfiguration.uniformBucketLevelAccess.enabled"
+      title      = "Uniform Bucket-Level Access Disabled"
+    }
+  }
+}
+
+resource "google_scc_management_organization_event_threat_detection_custom_module" "this" {
+  count = local.enable_premium && var.enable_custom_etd_module && local.numeric_org_id != "" && local.trimmed_etd_config != "" ? 1 : 0
+
+  organization     = local.numeric_org_id
+  location         = "global"
+  display_name     = local.effective_etd_name
+  enablement_state = "ENABLED"
+  type             = var.custom_etd_type
+  config           = local.trimmed_etd_config
+
+  depends_on = [terraform_data.validate_security_posture]
 }
 
 resource "google_securityposture_posture" "foundation" {

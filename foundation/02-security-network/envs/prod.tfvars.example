@@ -16,3 +16,8 @@ enable_psc              = true
 enable_vpc_sc           = true
 enforce_vpc_sc          = true
 enable_alerts           = true
+
+enable_hierarchical_firewall_policy = true
+enable_ngfw_standard_rules          = true
+enable_secure_tags                  = true
+enable_ngfw_enterprise              = false

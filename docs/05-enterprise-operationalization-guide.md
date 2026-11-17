@@ -31,9 +31,10 @@ terraform -chdir=foundation/00-bootstrap apply
 1. Complete [QUESTIONNAIRE.md](../QUESTIONNAIRE.md) or read gitignored `platform-context.json` from [gcp-launchpad](https://github.com/choo737/gcp-launchpad).
 2. Write answers into gitignored `foundation/01-org-governance/custom.auto.tfvars`.
 3. Enable `enable_org_policies = true` to enforce all 36 folder-level Org Policies.
-4. Set `retention_days = 2555`, `lock_audit_bucket = true`, and `enable_audit_project_lien = true` for regulated FSI or RMiT.
-5. Enable FinOps budgets (`enable_billing_budget = true`) and tag bindings on the central audit project.
-6. Select `scc_tier` (`NONE`, `STANDARD`, or `PREMIUM`) for Security Command Center v2 findings and alerts.
+4. Set `retention_days = 2555`, `lock_audit_bucket = true`, `enable_audit_cmek = true`, and `enable_audit_project_lien = true` for FSI.
+5. Keep `create_dedicated_finops_project = true`, configure `finops_alert_email_addresses`, and link Cloud Billing export in `"US"`.
+6. Enable `enable_backup_dr = true` for immutable Backup Vaults and daily GCE and Cloud SQL schedules.
+7. Select `scc_tier` (`NONE`, `STANDARD`, or `PREMIUM`) and `scc_scope` (`FOLDER` or `PROJECT`) for Security Command Center v2.
 
 ```bash
 export TFSTATE_BUCKET="<prefix>-<suffix>-tfstate"
@@ -107,7 +108,9 @@ additional_quality_scans = {
 
 1. Run `.agents/skills/drift-safe-apply/SKILL.md` checks and inspect `terraform plan` before every shared-root apply.
 2. Query regional SCC findings and audit logs inside `${prefix}_audit_logs` and `${prefix}_scc_findings` in BigQuery.
-3. Follow [docs/04-multi-env-and-decommission.md](04-multi-env-and-decommission.md) before lowering deletion flags, dropping liens, or tearing down locked buckets.
+3. Run `./scripts/verify-scc-detectors.sh --org <org_id>` to verify active ETD, VM, Container, and Cloud Run detectors.
+4. Run `./scripts/configure-bq-dr-replica.sh --project <id> --dataset <id> --replica-location <dr_region>` to replicate BigQuery datasets.
+5. Follow [docs/04-multi-env-and-decommission.md](04-multi-env-and-decommission.md) before lowering deletion flags, dropping liens, or tearing down locked buckets.
 
 ```sql
 SELECT category, severity, state, resource_name

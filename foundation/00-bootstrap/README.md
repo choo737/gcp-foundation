@@ -5,8 +5,8 @@ This optional Day-0 stage sets up remote state, stage handoff storage, and GitHu
 ## Resources Deployed
 
 - Enables IAM Credentials, STS, IAM, and Cloud Storage APIs on an existing seed project.
-- Creates `<prefix>-<suffix>-tfstate` with UBLA, versioning, and enforced public access prevention.
-- Creates `<prefix>-<suffix>-iac-outputs` for non-sensitive cross-repo handoff JSON files.
+- Creates `<prefix>-<suffix>-tfstate` with UBLA, versioning, 14-day soft delete, and enforced public access prevention.
+- Creates `<prefix>-<suffix>-iac-outputs` with 14-day soft delete for non-sensitive cross-repo handoff JSON files.
 - Creates dedicated CI service accounts (`tf-foundation-ci`, `tf-ingestion-ci`, `dataform-ci`).
 - Optionally deploys `module.github_wif` with strict CEL org, repo, ref, and environment rules.
 

@@ -8,7 +8,9 @@ This stage deploys KMS keys, VPC controls, VPC-SC perimeters, and Cloud Monitori
 - Primary and optional DR Cloud KMS key rings and crypto keys.
 - Optional Shared VPC host, subnet with Flow Logs, DNS logging, and Datastream PSC attachment.
 - Optional PSC endpoint with `googleapis.com.`, `pkg.dev.`, and `gcr.io.` private DNS zones.
-- Network firewall policy with TCP 443 PSC allow, optional DB egress, and deny-all egress.
+- Optional folder hierarchical firewall policy (`goto_next`) plus threat intelligence deny rules.
+- IAM-governed `GCE_FIREWALL` secure tags (`tier` and `access`) wired to VPC firewall rules.
+- VPC Global Network Firewall Policy with PSC TCP 443, FQDN egress allowlist, and NGFW Enterprise opt-in.
 - Environment-scoped VPC-SC perimeter and five Cloud Monitoring alert policies.
 
 ## Usage

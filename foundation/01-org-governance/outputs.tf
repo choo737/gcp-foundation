@@ -63,6 +63,21 @@ output "audit_project_lien_name" {
   description = "Resource Manager deletion lien name on the audit project, or empty string."
 }
 
+output "audit_kms_key_id" {
+  value       = try(google_kms_crypto_key.audit_cmek[0].id, null)
+  description = "Stage-01 CMEK crypto key ID encrypting audit SCC and Pub/Sub resources, or null."
+}
+
+output "finops_project_id" {
+  value       = local.effective_finops_project
+  description = "Effective FinOps project ID hosting Cloud Billing export, budgets, and monitoring channels."
+}
+
+output "finops_project_number" {
+  value       = var.create_dedicated_finops_project ? module.finops_project[0].project_number : module.audit_project.project_number
+  description = "Numeric project number of the effective FinOps project."
+}
+
 output "billing_export_dataset_id" {
   value       = module.finops_governance.billing_export_dataset_id
   description = "Central Cloud Billing export BigQuery dataset ID."
@@ -76,6 +91,41 @@ output "budget_pubsub_topic_id" {
 output "budget_name" {
   value       = module.finops_governance.budget_name
   description = "Cloud Billing budget resource name, or null when disabled."
+}
+
+output "environment_budget_names" {
+  value       = module.finops_governance.environment_budget_names
+  description = "Map of environment names to Cloud Billing budget resource names."
+}
+
+output "workload_budget_names" {
+  value       = module.finops_governance.workload_budget_names
+  description = "Map of workload keys to Cloud Billing budget resource names."
+}
+
+output "backup_project_id" {
+  value       = var.enable_backup_dr ? module.backup_project[0].project_id : ""
+  description = "Dedicated Backup and DR project ID when enabled, or empty string."
+}
+
+output "backup_project_number" {
+  value       = var.enable_backup_dr ? module.backup_project[0].project_number : ""
+  description = "Numeric project number of the Backup and DR project when enabled, or empty string."
+}
+
+output "backup_vault_id" {
+  value       = try(module.backup_dr[0].backup_vault_id, null)
+  description = "Backup and DR vault resource ID when enabled, or null."
+}
+
+output "gce_backup_plan_id" {
+  value       = try(module.backup_dr[0].gce_backup_plan_id, null)
+  description = "Daily Compute Engine Backup and DR plan ID when enabled, or null."
+}
+
+output "cloudsql_backup_plan_id" {
+  value       = try(module.backup_dr[0].cloudsql_backup_plan_id, null)
+  description = "Daily Cloud SQL Backup and DR plan ID when enabled, or null."
 }
 
 output "finops_tag_value_ids" {
@@ -141,6 +191,16 @@ output "siem_pubsub_topic_id" {
 output "scc_tier" {
   value       = module.scc_secops.scc_tier
   description = "Effective Security Command Center tier (NONE, STANDARD, or PREMIUM)."
+}
+
+output "scc_scope" {
+  value       = module.scc_secops.scc_scope
+  description = "Configured Security Command Center scope (FOLDER or PROJECT)."
+}
+
+output "scc_custom_etd_module_id" {
+  value       = module.scc_secops.scc_custom_etd_module_id
+  description = "Organization Event Threat Detection custom module resource name, or null."
 }
 
 output "scc_findings_dataset_id" {

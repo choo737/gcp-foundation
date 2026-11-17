@@ -1,7 +1,10 @@
 """Verify Option B tiered Security Command Center (NONE, STANDARD, PREMIUM) controls."""
 
+import os
 from pathlib import Path
 import re
+import stat
+import subprocess
 import unittest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -51,7 +54,8 @@ class SccSecOpsTest(unittest.TestCase):
         self.assertIn('resource "google_scc_v2_folder_notification_config" "high_critical"', mod_main)
         self.assertIn('resource "google_monitoring_notification_channel" "scc_email"', mod_main)
         self.assertIn('resource "google_monitoring_alert_policy" "scc_unacked_findings"', mod_main)
-        self.assertIn("pubsub.googleapis.com/subscription/num_undelivered_messages", mod_main)
+        self.assertIn("pubsub.googleapis.com/topic/send_message_operation_count", mod_main)
+        self.assertIn('auto_close = "1800s"', mod_main)
 
         self.assertIn('resource "google_scc_v2_folder_mute_config" "nonprod"', mod_main)
         mute_type_token = 'type           = "' + "DYN" + 'AMIC"'
@@ -112,16 +116,64 @@ class SccSecOpsTest(unittest.TestCase):
 
         for out_name in (
             "scc_tier",
+            "scc_scope",
             "scc_findings_dataset_id",
             "scc_big_query_export_name",
             "scc_findings_topic_id",
             "scc_pubsub_topic_id",
             "scc_findings_subscription_id",
             "scc_custom_sha_module_ids",
+            "scc_custom_etd_module_id",
             "scc_posture_deployment_id",
+            "audit_kms_key_id",
         ):
             with self.subTest(output=out_name):
                 self.assertIn(f'output "{out_name}"', org_outs)
+
+    def test_stage_01_cmek_project_scope_push_etd_and_verifier_script(self) -> None:
+        org_main = (ORG_STAGE_DIR / "main.tf").read_text(encoding="utf-8")
+        org_vars = (ORG_STAGE_DIR / "variables.tf").read_text(encoding="utf-8")
+        mod_main = (SCC_MOD_DIR / "main.tf").read_text(encoding="utf-8")
+        mod_vars = (SCC_MOD_DIR / "variables.tf").read_text(encoding="utf-8")
+
+        self.assertRegex(org_vars, r'variable\s+"enable_audit_cmek"[\s\S]*?default\s*=\s*true')
+        self.assertRegex(org_vars, r'variable\s+"audit_kms_protection_level"[\s\S]*?default\s*=\s*"SOFTWARE"')
+        self.assertIn('"cloudkms.googleapis.com"', org_main)
+        self.assertIn('resource "google_kms_key_ring" "audit"', org_main)
+        self.assertIn('resource "google_kms_crypto_key" "audit_cmek"', org_main)
+        self.assertIn("@bigquery-encryption.iam.gserviceaccount.com", org_main)
+        self.assertIn("@gcp-sa-pubsub.iam.gserviceaccount.com", org_main)
+        self.assertIn("siem_kms_key_id", org_main)
+
+        self.assertRegex(mod_vars, r'variable\s+"scc_scope"[\s\S]*?default\s*=\s*"FOLDER"')
+        self.assertIn('resource "google_scc_v2_project_scc_big_query_export" "project_active_findings"', mod_main)
+        self.assertIn('resource "google_scc_v2_project_notification_config" "project_high_critical"', mod_main)
+        self.assertIn('resource "google_scc_management_project_security_health_analytics_custom_module" "project_prod_bq_cmek"', mod_main)
+        self.assertIn('resource "google_scc_management_organization_event_threat_detection_custom_module" "this"', mod_main)
+        self.assertIn('push_config', mod_main)
+
+        script = REPO_ROOT / "scripts" / "verify-scc-detectors.sh"
+        self.assertTrue(script.is_file())
+        self.assertTrue(script.stat().st_mode & stat.S_IXUSR)
+        self.assertEqual(subprocess.run(["bash", "-n", str(script)], check=False).returncode, 0)
+
+        dry_proj = subprocess.run(
+            [str(script), "--project", "demo-proj-01", "--dry-run"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(dry_proj.returncode, 0, dry_proj.stderr)
+        for svc in (
+            "EVENT_THREAT_DETECTION",
+            "CONTAINER_THREAT_DETECTION",
+            "VIRTUAL_MACHINE_THREAT_DETECTION",
+            "CLOUD_RUN_THREAT_DETECTION",
+        ):
+            self.assertIn(svc, dry_proj.stdout)
+
+        bad_res = subprocess.run([str(script)], capture_output=True, text=True, check=False)
+        self.assertEqual(bad_res.returncode, 2)
 
 
 if __name__ == "__main__":

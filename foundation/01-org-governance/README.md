@@ -5,10 +5,12 @@ This stage deploys folders, the audit project, locked logging, FinOps, and Secur
 ## Resources Deployed
 
 - Root, `01-shared-infrastructure`, `02-workloads`, and `02-environments/{dev,staging,prod}` folders.
-- `${prefix}-audit` project protected by a Resource Manager deletion lien.
+- `${prefix}-audit` project protected by a Resource Manager deletion lien and Stage-01 CMEK key.
+- Optional `${prefix}-cmn-finops` project for `"US"` billing export, multi-tier budgets, and email channels.
+- Optional `${prefix}-cmn-backup` project with an immutable Backup Vault and daily GCE/Cloud SQL plans.
 - Locked central audit log bucket with Log Analytics and BigQuery linked dataset.
-- Optional SIEM Pub/Sub sink, Essential Contacts, and viewer IAM groups.
-- Optional 36-policy Org Policy baseline plus FinOps budget, export dataset, and tag bindings.
+- Optional CMEK-encrypted SIEM Pub/Sub sink, Essential Contacts, and viewer IAM groups.
+- Optional 36-policy Org Policy baseline plus FinOps cost-allocation tag bindings.
 - Tiered Security Command Center wiring via `modules/foundation/scc-secops` (`NONE`, `STANDARD`, or `PREMIUM`).
 
 ## Tiered Security Command Center

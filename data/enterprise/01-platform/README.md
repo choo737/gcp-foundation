@@ -11,9 +11,9 @@ This stage deploys separated governance, storage, and compute projects under env
 
 - Five projects: `data-gov`, `data-core`, `data-<domain>`, `data-etl`, and `data-bi`.
 - Governance taxonomy, policy tags, `LAST_FOUR_CHARACTERS` masking policy, and Dataplex glossary.
-- Landing GCS bucket (`incoming/` lifecycle rule), Artifact Registry repo, and Medallion BigQuery datasets.
+- Versioned landing GCS bucket (soft delete, optional dual-region `ASYNC_TURBO`, `incoming/` lifecycle) and Artifact Registry repo.
 - Custom `dataform_pipeline_runner` IAM roles without dataset update or delete permissions.
-- Shared VPC service attachments, VPC-SC additive membership, and BigQuery slot reservations.
+- Shared VPC service attachments, VPC-SC additive membership, and BigQuery `ENTERPRISE` or `ENTERPRISE_PLUS` reservations.
 
 ## Usage
 

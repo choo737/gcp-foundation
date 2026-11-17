@@ -40,14 +40,17 @@ module "network_project" {
   tag_bindings    = local.project_tag_bindings
   labels          = merge(var.labels, { environment = var.environment })
 
-  activate_apis = [
-    "cloudkms.googleapis.com",
-    "compute.googleapis.com",
-    "dns.googleapis.com",
-    "accesscontextmanager.googleapis.com",
-    "monitoring.googleapis.com",
-    "logging.googleapis.com",
-  ]
+  activate_apis = concat(
+    [
+      "cloudkms.googleapis.com",
+      "compute.googleapis.com",
+      "dns.googleapis.com",
+      "accesscontextmanager.googleapis.com",
+      "monitoring.googleapis.com",
+      "logging.googleapis.com",
+    ],
+    var.enable_ngfw_enterprise ? ["networksecurity.googleapis.com"] : [],
+  )
 
   depends_on = [terraform_data.validate_target_folder]
 }
@@ -61,33 +64,45 @@ resource "time_sleep" "network_api_propagation" {
 module "network_security" {
   source = "../../modules/foundation/network-security"
 
-  project_id                       = module.network_project.project_id
-  network_project_number           = module.network_project.project_number
-  region                           = var.region
-  dr_region                        = var.dr_region
-  prefix                           = var.prefix
-  environment                      = var.environment
-  enable_cmek                      = var.enable_cmek
-  kms_protection_level             = var.kms_protection_level
-  enable_vpc                       = var.enable_vpc
-  enable_shared_vpc_host           = var.enable_shared_vpc_host
-  subnet_cidr                      = var.subnet_cidr
-  enable_datastream_psc_attachment = var.enable_datastream_psc_attachment
-  datastream_nat_subnet_cidr       = var.datastream_nat_subnet_cidr
-  datastream_producer_accept_lists = var.datastream_producer_accept_lists
-  allowed_private_db_cidrs         = var.allowed_private_db_cidrs
-  enable_vpc_flow_logs             = var.enable_vpc_flow_logs
-  vpc_flow_logs_sampling           = var.vpc_flow_logs_sampling
-  enable_dns_logging               = var.enable_dns_logging
-  enable_psc                       = var.enable_psc
-  enable_vpc_sc                    = var.enable_vpc_sc
-  enforce_vpc_sc                   = var.enforce_vpc_sc
-  access_policy_id                 = var.access_policy_id
-  perimeter_project_numbers        = var.perimeter_project_numbers
-  vpc_sc_ingress_principals        = var.vpc_sc_ingress_principals
-  vpc_sc_audit_project_number      = local.effective_audit_num
-  vpc_sc_access_level_members      = var.vpc_sc_access_level_members
-  labels                           = merge(var.labels, { environment = var.environment })
+  project_id                          = module.network_project.project_id
+  network_project_number              = module.network_project.project_number
+  region                              = var.region
+  dr_region                           = var.dr_region
+  prefix                              = var.prefix
+  environment                         = var.environment
+  enable_cmek                         = var.enable_cmek
+  kms_protection_level                = var.kms_protection_level
+  enable_vpc                          = var.enable_vpc
+  enable_shared_vpc_host              = var.enable_shared_vpc_host
+  subnet_cidr                         = var.subnet_cidr
+  enable_datastream_psc_attachment    = var.enable_datastream_psc_attachment
+  datastream_nat_subnet_cidr          = var.datastream_nat_subnet_cidr
+  datastream_producer_accept_lists    = var.datastream_producer_accept_lists
+  allowed_private_db_cidrs            = var.allowed_private_db_cidrs
+  enable_vpc_flow_logs                = var.enable_vpc_flow_logs
+  vpc_flow_logs_sampling              = var.vpc_flow_logs_sampling
+  enable_dns_logging                  = var.enable_dns_logging
+  enable_psc                          = var.enable_psc
+  enable_vpc_sc                       = var.enable_vpc_sc
+  enforce_vpc_sc                      = var.enforce_vpc_sc
+  access_policy_id                    = var.access_policy_id
+  perimeter_project_numbers           = var.perimeter_project_numbers
+  vpc_sc_ingress_principals           = var.vpc_sc_ingress_principals
+  vpc_sc_audit_project_number         = local.effective_audit_num
+  vpc_sc_access_level_members         = var.vpc_sc_access_level_members
+  enable_hierarchical_firewall_policy = var.enable_hierarchical_firewall_policy
+  firewall_policy_folder_id           = local.env_folder
+  enable_ngfw_standard_rules          = var.enable_ngfw_standard_rules
+  threat_intelligence_lists           = var.threat_intelligence_lists
+  enable_iap_ssh_ingress              = var.enable_iap_ssh_ingress
+  enable_secure_tags                  = var.enable_secure_tags
+  allowed_egress_fqdns                = var.allowed_egress_fqdns
+  enable_ngfw_enterprise              = var.enable_ngfw_enterprise
+  organization_id                     = var.organization_id
+  ngfw_enterprise_zones               = var.ngfw_enterprise_zones
+  enable_ngfw_tls_inspection          = var.enable_ngfw_tls_inspection
+  ngfw_tls_inspection_policy_id       = var.ngfw_tls_inspection_policy_id
+  labels                              = merge(var.labels, { environment = var.environment })
 
   depends_on = [time_sleep.network_api_propagation]
 }

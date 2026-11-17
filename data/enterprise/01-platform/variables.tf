@@ -179,6 +179,40 @@ variable "delete_contents_on_destroy" {
   description = "Whether destroy removes tables, repositories, and landing objects."
 }
 
+variable "soft_delete_retention_seconds" {
+  type        = number
+  default     = 1209600
+  description = "GCS soft-delete retention in seconds (1209600 = 14 days, 2592000 = 30 days; 0 disables or 604800..7776000)."
+
+  validation {
+    condition     = var.soft_delete_retention_seconds == 0 || (var.soft_delete_retention_seconds >= 604800 && var.soft_delete_retention_seconds <= 7776000)
+    error_message = "soft_delete_retention_seconds must be 0 or between 604800 (7 days) and 7776000 (90 days)."
+  }
+}
+
+variable "enable_dual_region_gcs" {
+  type        = bool
+  default     = false
+  description = "Whether to provision the landing bucket as a custom dual-region bucket."
+}
+
+variable "dual_region_data_locations" {
+  type        = list(string)
+  default     = []
+  description = "Two GCP regions (for example [\"asia-southeast1\", \"asia-southeast2\"]) when enable_dual_region_gcs is true."
+}
+
+variable "gcs_rpo" {
+  type        = string
+  default     = "DEFAULT"
+  description = "Replication RPO mode for dual-region landing bucket (DEFAULT or ASYNC_TURBO)."
+
+  validation {
+    condition     = contains(["DEFAULT", "ASYNC_TURBO"], var.gcs_rpo)
+    error_message = "gcs_rpo must be DEFAULT or ASYNC_TURBO."
+  }
+}
+
 variable "ephemeral_table_expiration_ms" {
   type        = number
   default     = 7776000000
@@ -195,6 +229,23 @@ variable "enable_reservations" {
   type        = bool
   default     = true
   description = "Whether to provision BigQuery Enterprise slot reservations."
+}
+
+variable "reservation_edition" {
+  type        = string
+  default     = "ENTERPRISE"
+  description = "BigQuery reservation edition (STANDARD, ENTERPRISE, or ENTERPRISE_PLUS)."
+
+  validation {
+    condition     = contains(["STANDARD", "ENTERPRISE", "ENTERPRISE_PLUS"], var.reservation_edition)
+    error_message = "reservation_edition must be STANDARD, ENTERPRISE, or ENTERPRISE_PLUS."
+  }
+}
+
+variable "reservation_secondary_location" {
+  type        = string
+  default     = ""
+  description = "Optional secondary DR location for ENTERPRISE_PLUS BigQuery slot reservations."
 }
 
 variable "baseline_slots" {

@@ -2,6 +2,7 @@ locals {
   numeric_folder_id  = replace(var.folder_id, "folders/", "")
   folder_resource    = "folders/${local.numeric_folder_id}"
   effective_location = coalesce(var.logging_location, var.region)
+  trimmed_siem_kms   = var.siem_kms_key_id != null ? trimspace(var.siem_kms_key_id) : ""
 
   normalized_policy_member_domains = [
     for d in var.allowed_policy_member_domains :
@@ -229,9 +230,10 @@ resource "google_org_policy_policy" "protocol_forwarding" {
 resource "google_pubsub_topic" "siem_logs" {
   count = var.enable_siem_pubsub_sink ? 1 : 0
 
-  project = var.audit_project_id
-  name    = "${var.prefix}-siem-audit-logs"
-  labels  = var.labels
+  project      = var.audit_project_id
+  name         = "${var.prefix}-siem-audit-logs"
+  kms_key_name = local.trimmed_siem_kms != "" ? local.trimmed_siem_kms : null
+  labels       = var.labels
 }
 
 resource "google_logging_folder_sink" "siem" {

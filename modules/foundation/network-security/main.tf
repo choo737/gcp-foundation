@@ -7,6 +7,17 @@ locals {
   initial_vpc_sc_project_numbers = distinct(compact(concat([local.effective_network_project_num], var.perimeter_project_numbers)))
   initial_vpc_sc_resources       = [for num in local.initial_vpc_sc_project_numbers : "projects/${num}"]
 
+  trimmed_fw_folder_id  = var.firewall_policy_folder_id != null ? trimspace(var.firewall_policy_folder_id) : ""
+  clean_fw_folder_id    = local.trimmed_fw_folder_id != "" ? "folders/${replace(local.trimmed_fw_folder_id, "folders/", "")}" : ""
+  create_hierarchical   = var.enable_hierarchical_firewall_policy && local.clean_fw_folder_id != ""
+  create_vpc_fw_policy  = var.enable_vpc && (var.enable_psc || var.enable_ngfw_enterprise)
+  create_secure_tags    = var.enable_vpc && var.enable_secure_tags
+  trimmed_org_id        = var.organization_id != null ? trimspace(var.organization_id) : ""
+  numeric_org_id        = replace(local.trimmed_org_id, "organizations/", "")
+  trimmed_tls_policy_id = var.ngfw_tls_inspection_policy_id != null ? trimspace(var.ngfw_tls_inspection_policy_id) : ""
+  effective_ngfw_zones  = length(var.ngfw_enterprise_zones) > 0 ? var.ngfw_enterprise_zones : ["${var.region}-a", "${var.region}-b"]
+  create_ngfw_ent       = var.enable_vpc && var.enable_ngfw_enterprise && local.numeric_org_id != ""
+
   vpc_sc_restricted_services = [
     "artifactregistry.googleapis.com",
     "bigquery.googleapis.com",
@@ -262,21 +273,320 @@ resource "google_dns_record_set" "psc_artifact_cname" {
   rrdatas      = [each.value.dns_name]
 }
 
+resource "terraform_data" "validate_ngfw_enterprise" {
+  lifecycle {
+    precondition {
+      condition     = !var.enable_ngfw_enterprise || (local.numeric_org_id != "" && var.enable_vpc)
+      error_message = "organization_id and enable_vpc = true are required when enable_ngfw_enterprise is true."
+    }
+  }
+}
+
+resource "google_compute_firewall_policy" "folder" {
+  count = local.create_hierarchical ? 1 : 0
+
+  parent      = local.clean_fw_folder_id
+  short_name  = "${var.prefix}-${var.environment}-folder-fw"
+  description = "Hierarchical folder firewall policy for ${var.environment} NGFW baseline."
+}
+
+resource "google_compute_firewall_policy_association" "folder" {
+  count = local.create_hierarchical ? 1 : 0
+
+  name              = "${var.prefix}-${var.environment}-folder-fw-assoc"
+  attachment_target = local.clean_fw_folder_id
+  firewall_policy   = google_compute_firewall_policy.folder[0].id
+}
+
+resource "google_compute_firewall_policy_rule" "folder_threat_intel_ingress" {
+  count = local.create_hierarchical && var.enable_ngfw_standard_rules && length(var.threat_intelligence_lists) > 0 ? 1 : 0
+
+  firewall_policy = google_compute_firewall_policy.folder[0].id
+  description     = "Deny ingress from NGFW Standard threat intelligence lists."
+  priority        = 1000
+  direction       = "INGRESS"
+  action          = "deny"
+  enable_logging  = true
+
+  match {
+    src_threat_intelligences = var.threat_intelligence_lists
+
+    layer4_configs {
+      ip_protocol = "all"
+    }
+  }
+}
+
+resource "google_compute_firewall_policy_rule" "folder_threat_intel_egress" {
+  count = local.create_hierarchical && var.enable_ngfw_standard_rules && length(var.threat_intelligence_lists) > 0 ? 1 : 0
+
+  firewall_policy = google_compute_firewall_policy.folder[0].id
+  description     = "Deny egress to NGFW Standard threat intelligence lists."
+  priority        = 1010
+  direction       = "EGRESS"
+  action          = "deny"
+  enable_logging  = true
+
+  match {
+    dest_threat_intelligences = var.threat_intelligence_lists
+
+    layer4_configs {
+      ip_protocol = "all"
+    }
+  }
+}
+
+resource "google_compute_firewall_policy_rule" "folder_allow_iap" {
+  count = local.create_hierarchical && var.enable_iap_ssh_ingress ? 1 : 0
+
+  firewall_policy = google_compute_firewall_policy.folder[0].id
+  description     = "Allow IAP TCP forwarding for SSH and RDP administration."
+  priority        = 2000
+  direction       = "INGRESS"
+  action          = "allow"
+  enable_logging  = true
+
+  match {
+    src_ip_ranges = ["35.235.240.0/20"]
+
+    layer4_configs {
+      ip_protocol = "tcp"
+      ports       = ["22", "3389"]
+    }
+  }
+}
+
+resource "google_compute_firewall_policy_rule" "folder_allow_gclb_hc" {
+  count = local.create_hierarchical ? 1 : 0
+
+  firewall_policy = google_compute_firewall_policy.folder[0].id
+  description     = "Allow Google Cloud Load Balancing health check probes."
+  priority        = 2010
+  direction       = "INGRESS"
+  action          = "allow"
+  enable_logging  = false
+
+  match {
+    src_ip_ranges = ["35.191.0.0/16", "130.211.0.0/22"]
+
+    layer4_configs {
+      ip_protocol = "tcp"
+      ports       = ["80", "443", "8080"]
+    }
+  }
+}
+
+resource "google_compute_firewall_policy_rule" "folder_goto_next_ingress" {
+  count = local.create_hierarchical ? 1 : 0
+
+  firewall_policy = google_compute_firewall_policy.folder[0].id
+  description     = "Delegate remaining ingress evaluation to lower-level VPC policies."
+  priority        = 2147483640
+  direction       = "INGRESS"
+  action          = "goto_next"
+  enable_logging  = false
+
+  match {
+    src_ip_ranges = ["0.0.0.0/0"]
+
+    layer4_configs {
+      ip_protocol = "all"
+    }
+  }
+}
+
+resource "google_compute_firewall_policy_rule" "folder_goto_next_egress" {
+  count = local.create_hierarchical ? 1 : 0
+
+  firewall_policy = google_compute_firewall_policy.folder[0].id
+  description     = "Delegate remaining egress evaluation to lower-level VPC policies."
+  priority        = 2147483641
+  direction       = "EGRESS"
+  action          = "goto_next"
+  enable_logging  = false
+
+  match {
+    dest_ip_ranges = ["0.0.0.0/0"]
+
+    layer4_configs {
+      ip_protocol = "all"
+    }
+  }
+}
+
+resource "google_tags_tag_key" "tier" {
+  count = local.create_secure_tags ? 1 : 0
+
+  parent      = "projects/${var.project_id}"
+  short_name  = "${var.prefix}-${var.environment}-tier"
+  description = "NGFW application tier secure tag key."
+  purpose     = "GCE_FIREWALL"
+  purpose_data = {
+    network = "${var.project_id}/${google_compute_network.this[0].name}"
+  }
+}
+
+resource "google_tags_tag_value" "tier" {
+  for_each = local.create_secure_tags ? toset(["web", "app", "data"]) : toset([])
+
+  parent      = google_tags_tag_key.tier[0].id
+  short_name  = each.key
+  description = "NGFW ${each.key} tier secure tag value."
+}
+
+resource "google_tags_tag_key" "access" {
+  count = local.create_secure_tags ? 1 : 0
+
+  parent      = "projects/${var.project_id}"
+  short_name  = "${var.prefix}-${var.environment}-access"
+  description = "NGFW access control secure tag key."
+  purpose     = "GCE_FIREWALL"
+  purpose_data = {
+    network = "${var.project_id}/${google_compute_network.this[0].name}"
+  }
+}
+
+resource "google_tags_tag_value" "allow_iap" {
+  count = local.create_secure_tags ? 1 : 0
+
+  parent      = google_tags_tag_key.access[0].id
+  short_name  = "allow-iap"
+  description = "Allow IAP TCP administrative ingress to tagged workloads."
+}
+
+resource "google_network_security_firewall_endpoint" "ngfw" {
+  for_each = local.create_ngfw_ent ? toset(local.effective_ngfw_zones) : toset([])
+
+  name               = "${var.prefix}-${var.environment}-ngfw-${each.value}"
+  parent             = "organizations/${local.numeric_org_id}"
+  location           = each.value
+  billing_project_id = var.project_id
+  labels             = var.labels
+
+  depends_on = [terraform_data.validate_ngfw_enterprise]
+}
+
+resource "google_network_security_firewall_endpoint_association" "ngfw" {
+  for_each = local.create_ngfw_ent ? toset(local.effective_ngfw_zones) : toset([])
+
+  name                  = "${var.prefix}-${var.environment}-ngfw-assoc-${each.value}"
+  parent                = "projects/${var.project_id}"
+  location              = each.value
+  network               = google_compute_network.this[0].id
+  firewall_endpoint     = google_network_security_firewall_endpoint.ngfw[each.key].id
+  tls_inspection_policy = local.trimmed_tls_policy_id != "" ? local.trimmed_tls_policy_id : null
+  labels                = var.labels
+}
+
+resource "google_network_security_security_profile" "threat_prevention" {
+  count = local.create_ngfw_ent ? 1 : 0
+
+  name        = "${var.prefix}-${var.environment}-threat-profile"
+  parent      = "organizations/${local.numeric_org_id}"
+  location    = "global"
+  type        = "THREAT_PREVENTION"
+  description = "NGFW Enterprise intrusion and threat prevention profile."
+  labels      = var.labels
+
+  threat_prevention_profile {}
+
+  depends_on = [terraform_data.validate_ngfw_enterprise]
+}
+
+resource "google_network_security_security_profile_group" "ngfw" {
+  count = local.create_ngfw_ent ? 1 : 0
+
+  name                      = "${var.prefix}-${var.environment}-spg"
+  parent                    = "organizations/${local.numeric_org_id}"
+  location                  = "global"
+  description               = "NGFW Enterprise security profile group."
+  threat_prevention_profile = google_network_security_security_profile.threat_prevention[0].id
+  labels                    = var.labels
+}
+
 resource "google_compute_network_firewall_policy" "egress" {
-  count = var.enable_vpc && var.enable_psc ? 1 : 0
+  count = local.create_vpc_fw_policy ? 1 : 0
 
   project     = var.project_id
   name        = "${var.prefix}-egress-policy"
-  description = "Network firewall policy enforcing private PSC egress and default deny-all."
+  description = "Network firewall policy enforcing private PSC egress, NGFW rules, and default deny-all."
 }
 
 resource "google_compute_network_firewall_policy_association" "egress" {
-  count = var.enable_vpc && var.enable_psc ? 1 : 0
+  count = local.create_vpc_fw_policy ? 1 : 0
 
   project           = var.project_id
   name              = "${var.prefix}-egress-policy-assoc"
   attachment_target = google_compute_network.this[0].id
   firewall_policy   = google_compute_network_firewall_policy.egress[0].name
+}
+
+resource "google_compute_network_firewall_policy_rule" "vpc_threat_intel_ingress" {
+  count = local.create_vpc_fw_policy && var.enable_ngfw_standard_rules && length(var.threat_intelligence_lists) > 0 ? 1 : 0
+
+  project         = var.project_id
+  firewall_policy = google_compute_network_firewall_policy.egress[0].name
+  rule_name       = "${var.prefix}-deny-threat-intel-ingress"
+  description     = "Deny ingress from NGFW Standard threat intelligence lists."
+  direction       = "INGRESS"
+  priority        = 500
+  action          = "deny"
+  enable_logging  = true
+
+  match {
+    src_threat_intelligences = var.threat_intelligence_lists
+
+    layer4_configs {
+      ip_protocol = "all"
+    }
+  }
+}
+
+resource "google_compute_network_firewall_policy_rule" "vpc_threat_intel_egress" {
+  count = local.create_vpc_fw_policy && var.enable_ngfw_standard_rules && length(var.threat_intelligence_lists) > 0 ? 1 : 0
+
+  project         = var.project_id
+  firewall_policy = google_compute_network_firewall_policy.egress[0].name
+  rule_name       = "${var.prefix}-deny-threat-intel-egress"
+  description     = "Deny egress to NGFW Standard threat intelligence lists."
+  direction       = "EGRESS"
+  priority        = 510
+  action          = "deny"
+  enable_logging  = true
+
+  match {
+    dest_threat_intelligences = var.threat_intelligence_lists
+
+    layer4_configs {
+      ip_protocol = "all"
+    }
+  }
+}
+
+resource "google_compute_network_firewall_policy_rule" "vpc_allow_iap_secure_tag" {
+  count = local.create_vpc_fw_policy && local.create_secure_tags && var.enable_iap_ssh_ingress ? 1 : 0
+
+  project         = var.project_id
+  firewall_policy = google_compute_network_firewall_policy.egress[0].name
+  rule_name       = "${var.prefix}-allow-iap-tagged"
+  description     = "Allow IAP TCP forwarding only to VMs bearing the allow-iap secure tag."
+  direction       = "INGRESS"
+  priority        = 900
+  action          = "allow"
+  enable_logging  = true
+
+  target_secure_tags {
+    name = google_tags_tag_value.allow_iap[0].id
+  }
+
+  match {
+    src_ip_ranges = ["35.235.240.0/20"]
+
+    layer4_configs {
+      ip_protocol = "tcp"
+      ports       = ["22", "3389"]
+    }
+  }
 }
 
 resource "google_compute_network_firewall_policy_rule" "allow_psc_egress" {
@@ -321,6 +631,54 @@ resource "google_compute_network_firewall_policy_rule" "allow_private_db_egress"
       ports       = ["5432", "3306"]
     }
   }
+}
+
+resource "google_compute_network_firewall_policy_rule" "vpc_allow_fqdn_egress" {
+  count = local.create_vpc_fw_policy && length(var.allowed_egress_fqdns) > 0 ? 1 : 0
+
+  project         = var.project_id
+  firewall_policy = google_compute_network_firewall_policy.egress[0].name
+  rule_name       = "${var.prefix}-allow-fqdn-https"
+  description     = "Allow HTTPS egress to explicitly approved external FQDNs."
+  direction       = "EGRESS"
+  priority        = 1200
+  action          = "allow"
+  enable_logging  = true
+
+  match {
+    dest_fqdns = var.allowed_egress_fqdns
+
+    layer4_configs {
+      ip_protocol = "tcp"
+      ports       = ["443"]
+    }
+  }
+}
+
+resource "google_compute_network_firewall_policy_rule" "ngfw_enterprise_egress" {
+  count = local.create_ngfw_ent ? 1 : 0
+
+  project                = var.project_id
+  firewall_policy        = google_compute_network_firewall_policy.egress[0].name
+  rule_name              = "${var.prefix}-ngfw-l7-inspect"
+  description            = "Apply NGFW Enterprise Layer 7 threat prevention to inspected egress traffic."
+  direction              = "EGRESS"
+  priority               = 1300
+  action                 = "apply_security_profile_group"
+  security_profile_group = "//networksecurity.googleapis.com/${google_network_security_security_profile_group.ngfw[0].id}"
+  tls_inspect            = var.enable_ngfw_tls_inspection
+  enable_logging         = true
+
+  match {
+    dest_ip_ranges = ["0.0.0.0/0"]
+
+    layer4_configs {
+      ip_protocol = "tcp"
+      ports       = ["443", "80"]
+    }
+  }
+
+  depends_on = [google_network_security_firewall_endpoint_association.ngfw]
 }
 
 resource "google_compute_network_firewall_policy_rule" "deny_all_egress" {

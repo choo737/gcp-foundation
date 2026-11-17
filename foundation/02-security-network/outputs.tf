@@ -53,6 +53,31 @@ output "egress_firewall_policy_id" {
   description = "PSC egress network firewall policy ID, or null."
 }
 
+output "hierarchical_firewall_policy_id" {
+  value       = module.network_security.hierarchical_firewall_policy_id
+  description = "Folder-level hierarchical firewall policy ID, or null."
+}
+
+output "secure_tag_key_ids" {
+  value       = module.network_security.secure_tag_key_ids
+  description = "Map of GCE_FIREWALL secure tag key IDs (tier and access)."
+}
+
+output "secure_tag_value_ids" {
+  value       = module.network_security.secure_tag_value_ids
+  description = "Map of GCE_FIREWALL secure tag value IDs (web, app, data, allow_iap)."
+}
+
+output "ngfw_enterprise_endpoint_ids" {
+  value       = module.network_security.ngfw_enterprise_endpoint_ids
+  description = "Map of zones to NGFW Enterprise firewall endpoint IDs."
+}
+
+output "ngfw_security_profile_group_id" {
+  value       = module.network_security.ngfw_security_profile_group_id
+  description = "NGFW Enterprise security profile group ID, or null."
+}
+
 output "vpc_sc_perimeter_name" {
   value       = module.network_security.vpc_sc_perimeter_name
   description = "Full resource name of the VPC-SC service perimeter, or empty string."
@@ -111,4 +136,14 @@ output "project_deletion_policy" {
 output "finops_tag_value_ids" {
   value       = var.finops_tag_value_ids
   description = "FinOps tag value IDs propagated downstream."
+}
+
+output "backup_project_id" {
+  value       = var.backup_project_id
+  description = "Optional Backup and DR project ID propagated downstream."
+}
+
+output "backup_vault_id" {
+  value       = var.backup_vault_id
+  description = "Optional Backup and DR vault ID propagated downstream."
 }

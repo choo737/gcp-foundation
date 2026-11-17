@@ -8,7 +8,9 @@ This repository separates cloud foundation guardrails from data platform operati
 organizations/<org_id> (or folders/<parent_id>)
 └── <prefix>-gcp-foundation
     ├── 01-shared-infrastructure
-    │   └── <prefix>-audit
+    │   ├── <prefix>-<suffix>-audit
+    │   ├── <prefix>-<suffix>-cmn-finops
+    │   └── <prefix>-<suffix>-cmn-backup
     ├── 02-environments
     │   └── {dev, staging, prod}
     │       ├── <prefix>-<suffix>-network
@@ -54,17 +56,21 @@ How `00_linked.auto.tfvars.json` and `gs://<prefix>-iac-outputs` solve this:
 - The script keeps only variables declared in Bob's `variables.tf` and writes `00_linked.auto.tfvars.json` (`0600`).
 - Alice's `.tfstate` remains locked inside `<prefix>-<suffix>-tfstate` at all times.
 
-## Design Rules
+## Design Rules & Official References
 
 - Every project disables default VPC creation (`auto_create_network = false`).
 - Production projects set `deletion_policy = "PREVENT"` and folders set `deletion_protection = true`.
-- Foundation stage 00 creates hardened `tfstate` and `iac-outputs` buckets plus scoped GitHub WIF.
-- Foundation stage 01 locks the audit bucket, attaches a project lien, and enforces FinOps tags.
+- Foundation stage 00 creates hardened `tfstate` and `iac-outputs` buckets with 14-day soft delete plus GitHub WIF.
+- Foundation stage 01 provisions `<prefix>-<suffix>-cmn-finops` with `"US"` export for 2-month backfill and alert-only multi-tier budgets.
+- See [Cloud Billing BigQuery Export Setup](https://docs.cloud.google.com/billing/docs/how-to/export-data-bigquery-setup) and [Cloud Billing Export Schema](https://docs.cloud.google.com/billing/docs/how-to/export-data-bigquery).
+- Foundation stage 01 provisions optional `<prefix>-<suffix>-cmn-backup` with immutable Backup Vaults and daily GCE/Cloud SQL plans.
+- Enterprise GCS landing buckets support 14-day or 30-day soft delete plus optional dual-region `ASYNC_TURBO` replication.
+- See [Cloud Storage SLA](https://cloud.google.com/storage/sla) for regional, dual-region, and multi-region availability targets.
+- Foundation stage 01 encrypts SCC datasets and Pub/Sub topics with Stage-01 CMEK and supports `FOLDER` or `PROJECT` scope.
 - Foundation stage 01 enforces a 36-policy Org Policy baseline when `enable_org_policies = true`.
-- Foundation stage 01 supports tiered SCC (`NONE`, `STANDARD`, `PREMIUM`) via `modules/foundation/scc-secops` (Enterprise tier retired May 2026).
-- SCC v2 APIs use `scc_location` (`global`, `us`, `eu`, `sa`), while BigQuery findings stay regional in `var.region`.
 - Foundation stage 02 configures CMEK, Shared VPC, Flow Logs, DNS logging, VPC-SC, and monitoring alerts.
-- Stage 02 enforces a network firewall policy with PSC TCP 443 allow and default deny-all egress.
+- Stage 02 layers folder hierarchical firewall policies, `GCE_FIREWALL` secure tags, threat intel rules, and NGFW Enterprise opt-in.
+- See [Cloud NGFW Overview](https://cloud.google.com/security/products/firewall) and [Cloud NGFW Pricing](https://cloud.google.com/firewall/pricing).
 - Dataform ETL uses the custom `dataform_pipeline_runner` role without dataset update or delete rights.
-- BigQuery slot reservations default to `slot_capacity = 0` with `ENTERPRISE` edition autoscaling.
+- BigQuery slot reservations default to `slot_capacity = 0` with `ENTERPRISE` autoscaling or `ENTERPRISE_PLUS` `secondary_location` for DR.
 - No stage shares Terraform state; stages pass outputs through `scripts/link-stages.sh` into `00_linked.auto.tfvars.json`.

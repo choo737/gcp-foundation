@@ -67,6 +67,12 @@ variable "enable_siem_pubsub_sink" {
   description = "Whether to create an optional Pub/Sub topic and folder sink for external SIEM export."
 }
 
+variable "siem_kms_key_id" {
+  type        = string
+  default     = ""
+  description = "Optional Cloud KMS key resource ID encrypting the SIEM Pub/Sub topic."
+}
+
 variable "enable_scc_notifications" {
   type        = bool
   default     = false

@@ -107,6 +107,17 @@ variable "force_destroy" {
   description = "Whether destroy removes objects inside tfstate and iac-outputs buckets."
 }
 
+variable "soft_delete_retention_seconds" {
+  type        = number
+  default     = 1209600
+  description = "GCS soft-delete retention in seconds (1209600 = 14 days; 0 disables or 604800..7776000)."
+
+  validation {
+    condition     = var.soft_delete_retention_seconds == 0 || (var.soft_delete_retention_seconds >= 604800 && var.soft_delete_retention_seconds <= 7776000)
+    error_message = "soft_delete_retention_seconds must be 0 or between 604800 (7 days) and 7776000 (90 days)."
+  }
+}
+
 variable "propagation_wait_seconds" {
   type        = string
   default     = "30s"
