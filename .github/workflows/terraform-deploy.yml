@@ -61,6 +61,7 @@ jobs:
     needs: validate
     if: >-
       vars.GCP_WIF_PROVIDER != '' &&
+      (vars.GCP_WIF_SERVICE_ACCOUNT != '' || vars.GCP_TF_SA_EMAIL != '') &&
       vars.GCP_TFSTATE_BUCKET != '' &&
       (
         (github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AUTO_DEPLOY_DEV == 'true') ||
@@ -79,7 +80,7 @@ jobs:
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_TF_SA_EMAIL }}
+          service_account: ${{ vars.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_TF_SA_EMAIL }}
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
@@ -117,6 +118,7 @@ jobs:
       always() &&
       needs.validate.result == 'success' &&
       vars.GCP_WIF_PROVIDER != '' &&
+      (vars.GCP_WIF_SERVICE_ACCOUNT != '' || vars.GCP_TF_SA_EMAIL != '') &&
       vars.GCP_TFSTATE_BUCKET != '' &&
       (
         (github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AUTO_PROMOTE_STAGING == 'true' && needs.deploy-dev.result == 'success') ||
@@ -135,7 +137,7 @@ jobs:
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_TF_SA_EMAIL }}
+          service_account: ${{ vars.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_TF_SA_EMAIL }}
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
@@ -170,6 +172,7 @@ jobs:
     if: >-
       needs.validate.result == 'success' &&
       vars.GCP_WIF_PROVIDER != '' &&
+      (vars.GCP_WIF_SERVICE_ACCOUNT != '' || vars.GCP_TF_SA_EMAIL != '') &&
       vars.GCP_TFSTATE_BUCKET != '' &&
       github.event_name == 'workflow_dispatch' &&
       inputs.environment == 'prod'
@@ -186,7 +189,7 @@ jobs:
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_TF_SA_EMAIL }}
+          service_account: ${{ vars.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_TF_SA_EMAIL }}
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3

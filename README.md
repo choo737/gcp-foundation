@@ -80,7 +80,7 @@ make apply STAGE="foundation/02-security-network" ENV="${ENV}" TFSTATE_BUCKET="$
 
 ```text
 Read AGENTS.md, QUESTIONNAIRE.md, and .agents/skills/setup-customer-foundation/SKILL.md.
-Check for gitignored platform-context.json first, confirm Path 0-3, and write gitignored custom.auto.tfvars or envs/<env>.tfvars.
+Check platform-context.json first, confirm Path 0-3, and write gitignored custom.auto.tfvars or tracked envs/<env>.tfvars.
 ```
 
 ### Claude Code

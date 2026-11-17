@@ -196,6 +196,93 @@ class EnterpriseReadinessTest(unittest.TestCase):
                         {"environment": "dev", "kms_key_id": "k1", "vpc_id": "v2"},
                     )
 
+            # Verify --tfstate-bucket validation rejects empty/flag-swallowing values with exit code 2.
+            for bad_bucket_args in (
+                ["--env", "staging", "--tfstate-bucket", "", str(src_a), str(dst)],
+                ["--env", "staging", "--tfstate-bucket", "--env", str(src_a), str(dst)],
+                ["--env", "staging", "--tfstate-bucket=", str(src_a), str(dst)],
+                ["--env", "staging", "--tfstate-bucket", "BAD_BUCKET", str(src_a), str(dst)],
+            ):
+                with self.subTest(bad_bucket_args=bad_bucket_args):
+                    bad_res = subprocess.run(
+                        [str(script_path), *bad_bucket_args],
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(bad_res.returncode, 2, bad_res.stderr)
+
+            # Verify fail-closed cross-env state mismatch guard in both local-link and --export-gcs modes.
+            mismatch_src = tmp_path / "mismatch_stage"
+            mismatch_src.mkdir()
+            mismatch_tf = bin_dir / "terraform"
+            mismatch_tf.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json\n"
+                "print(json.dumps({'environment': {'value': 'dev', 'sensitive': False}, 'kms_key_id': {'value': 'k-dev'}}))\n",
+                encoding="utf-8",
+            )
+            mismatch_tf.chmod(0o755)
+            for mismatch_args in (
+                ["--env", "staging", str(mismatch_src), str(dst)],
+                ["--env", "staging", "--export-gcs", "gs://b/merged.json", str(mismatch_src)],
+            ):
+                with self.subTest(mismatch_args=mismatch_args):
+                    mm_res = subprocess.run(
+                        [str(script_path), *mismatch_args],
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(mm_res.returncode, 1, mm_res.stderr)
+                    self.assertIn("ERROR:", mm_res.stderr)
+                    self.assertIn("environment='dev'", mm_res.stderr)
+                    self.assertIn("expected 'staging'", mm_res.stderr)
+
+            # Verify --tfstate-bucket + --env re-initializes multi-env stage (with envs/) before output -json.
+            multi_src = tmp_path / "foundation" / "02-security-network"
+            (multi_src / "envs").mkdir(parents=True)
+            call_log = tmp_path / "tf_calls.log"
+            init_tf = bin_dir / "terraform"
+            init_tf.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, os, sys\n"
+                "args = sys.argv[1:]\n"
+                "with open(os.environ['TF_CALL_LOG'], 'a', encoding='utf-8') as f:\n"
+                "    f.write(' '.join(args) + '\\n')\n"
+                "if 'output' in args:\n"
+                "    print(json.dumps({'environment': {'value': 'staging', 'sensitive': False}, 'vpc_id': {'value': 'v-stg'}}))\n",
+                encoding="utf-8",
+            )
+            init_tf.chmod(0o755)
+            init_env = env.copy()
+            init_env["TF_CALL_LOG"] = str(call_log)
+            init_res = subprocess.run(
+                [
+                    str(script_path),
+                    "--env",
+                    "staging",
+                    "--tfstate-bucket",
+                    "my-tfstate-bucket",
+                    "foundation/02-security-network",
+                    str(dst),
+                ],
+                cwd=tmp_path,
+                env=init_env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(init_res.returncode, 0, init_res.stderr)
+            tf_calls = call_log.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(len(tf_calls), 2)
+            self.assertIn("init -reconfigure -input=false", tf_calls[0])
+            self.assertIn("-backend-config=bucket=my-tfstate-bucket", tf_calls[0])
+            self.assertIn("-backend-config=prefix=foundation/02-security-network/staging", tf_calls[0])
+            self.assertIn("output -json", tf_calls[1])
+
     def test_vpc_sc_additive_resources_and_non_lockout(self) -> None:
         net_sec = (REPO_ROOT / "modules" / "foundation" / "network-security" / "main.tf").read_text(encoding="utf-8")
         self.assertIn("_${var.environment}_data_perimeter", net_sec)
@@ -319,6 +406,7 @@ class EnterpriseReadinessTest(unittest.TestCase):
         deploy_wf = (REPO_ROOT / ".github" / "workflows" / "terraform-deploy.yml").read_text(encoding="utf-8")
         self.assertIn("id-token: write", deploy_wf)
         self.assertIn("vars.GCP_WIF_PROVIDER", deploy_wf)
+        self.assertIn("vars.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_TF_SA_EMAIL", deploy_wf)
         self.assertRegex(deploy_wf, r"google-github-actions/auth@[0-9a-f]{40}")
         self.assertNotIn("type: string", deploy_wf)
         for block in deploy_wf.split("run: |")[1:]:

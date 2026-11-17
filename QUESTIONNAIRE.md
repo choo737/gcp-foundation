@@ -10,12 +10,18 @@ Treat `platform-context.json` as local intake state only and never commit it to 
 
 | Handoff Field | Maps To Stage Variable | Notes |
 | --- | --- | --- |
-| `entry_path` | Adoption path (`Path 0`..`Path 3`) | Determines starting Terraform root directory |
-| `compliance_profile` | Section 2 profile | Selects retention, audit lock, HSM, and DR flags |
-| `parent_id` / `data_folder_id` | `parent_id` or `data_folder_id` | Org or folder target (`organizations/<YOUR_ORG_ID>` or `folders/<YOUR_FOLDER_ID>`) |
-| `billing_account` | `billing_account` | Linked Cloud Billing account ID |
-| `prefix` / `project_suffix` | `prefix` / `project_suffix` | 3-6 char prefix plus suffix like `dev01` |
-| `region` / `dr_region` | `region` / `dr_region` | Primary `asia-southeast1` and optional DR `asia-southeast2` |
+| `adoption_mode` | Adoption path (`Path 0`..`Path 3`) | `greenfield` runs `Path 0`..`1`; `brownfield` inspects `existing_landing_zone` |
+| `compliance_profile` | Section 2 profile | `sandbox_poc`, `enterprise_standard`, or `regulated_fsi_rmit` |
+| `primary_region` / `dr_region` | `region` / `dr_region` | Primary `asia-southeast1` and optional DR `asia-southeast2` |
+| `environments` | Active `envs/<env>.tfvars` tiers | List such as `["dev", "staging", "prod"]` |
+| `prefix` / `project_suffix` | `prefix` / `project_suffix` | `3-8` char prefix plus suffix like `dev01` |
+| `ci_identity_mode` | `foundation/00-bootstrap` WIF toggle | `github_oidc_wif` enables WIF with `github_owner` |
+| `finops.*` | Section 5 FinOps inputs | `create_dedicated_finops_project`, export location, budgets, thresholds |
+| `backup_dr.*` | Section 2 Backup and DR inputs | `enable_backup_dr`, retention days, vault lock, soft delete, `bq_dr_mode` |
+| `ngfw.*` | Section 4 NGFW flags | Hierarchical policy, standard rules, secure tags, `enable_ngfw_enterprise` |
+| `scc.*` | Section 3 SCC settings | `scc_tier`, `scc_scope`, `enable_audit_cmek`, alerts, `runtime_detectors` |
+
+Collect `parent_id`, `data_folder_id`, and `billing_account` directly because `platform-context.json` omits org and billing IDs.
 
 ## 1. Adoption Entry Path (`Path 0`..`Path 3`)
 
@@ -148,7 +154,7 @@ All three pools (`etl`, `bi`, `adhoc`) use `reservation_edition` (`"ENTERPRISE"`
 
 ## 6. Write Customer Variables and Link Stages
 
-Write answers only into gitignored `custom.auto.tfvars` or `envs/<env>.tfvars` inside each stage directory.
+Write answers into gitignored `custom.auto.tfvars` or tracked `envs/<env>.tfvars` inside private customer repos. Keep `terraform.tfvars` and `*.auto.tfvars*` gitignored.
 
 ```bash
 ./scripts/link-stages.sh --env dev foundation/01-org-governance foundation/02-security-network

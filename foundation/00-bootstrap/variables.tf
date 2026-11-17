@@ -12,11 +12,11 @@ variable "region" {
 variable "prefix" {
   type        = string
   default     = "ent"
-  description = "Short prefix (2 to 8 lowercase chars) for bootstrap buckets and WIF pool."
+  description = "Short prefix (3 to 8 lowercase chars) for bootstrap buckets and WIF pool."
 
   validation {
     condition     = can(regex("^[a-z][a-z0-9-]{1,6}[a-z0-9]$", var.prefix)) && !startswith(var.prefix, "gcp-")
-    error_message = "prefix must be 2-8 lowercase alphanumeric/hyphen chars and must not start with gcp-."
+    error_message = "prefix must be 3-8 lowercase alphanumeric/hyphen chars and must not start with gcp-."
   }
 }
 

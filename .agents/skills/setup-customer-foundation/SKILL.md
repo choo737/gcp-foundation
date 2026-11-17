@@ -41,7 +41,9 @@ Confirm the command prints `true`.
 ## Step 1: Check Handoff and Walk Through `QUESTIONNAIRE.md`
 
 Check for gitignored `platform-context.json` in the repo root first if routed from `https://github.com/choo737/gcp-launchpad`.
-Walk the customer through [QUESTIONNAIRE.md](../../../QUESTIONNAIRE.md) before writing `custom.auto.tfvars` or `envs/<env>.tfvars`.
+Map `adoption_mode`, `compliance_profile`, `primary_region`, `dr_region`, `environments`, `prefix` (`3-8` chars), `project_suffix`, and `ci_identity_mode`.
+Also map `finops.*`, `backup_dr.*`, `ngfw.*`, and `scc.*` from `platform-context.json` before asking repeated questions.
+Walk the customer through [QUESTIONNAIRE.md](../../../QUESTIONNAIRE.md) before writing `custom.auto.tfvars` or tracked `envs/<env>.tfvars`.
 Never guess organization IDs, billing accounts, project IDs, or IAM principals.
 Confirm these decisions with the customer first:
 
@@ -61,7 +63,7 @@ Collect the required variables before creating `custom.auto.tfvars` or `envs/<en
 - **Path 1 (Security & Data)**: `scc_tier`, `scc_alert_email_addresses`, `enable_org_policies`, `kms_protection_level`, `enforce_vpc_sc`, `monthly_budget_amount`, `enable_reservations`, `masked_readers`, `bi_analysts`.
 - **Path 2**: `data_folder_id`, `billing_account`, `region`, `prefix`, `project_suffix`, `environment`, optional `kms_key_id`, `shared_vpc_host_project_id`, `vpc_id`, `subnet_id`, `enable_reservations`, `masked_readers`, `bi_analysts`.
 - **Path 3**: `project_id`, `region`, `prefix`, `masked_readers`.
-- Keep `prefix` to 3-6 lowercase alphanumeric chars and set `project_suffix` (`dev01`, `stg01`, `prd01`).
+- Keep `prefix` to 3-8 lowercase alphanumeric chars and set `project_suffix` (`dev01`, `stg01`, `prd01`).
 - Offer optional `gcloud` lookup commands (`gcloud organizations list`, `gcloud billing accounts list`) only if asked.
 - If `enable_org_policies = true`, collect `allowed_policy_member_domains` and `allowed_contact_domains`.
 - Ask for `scc_tier` (`NONE`, `STANDARD` free, or `PREMIUM` paid; Enterprise retires May 21, 2027).
@@ -118,8 +120,8 @@ Pass `projects/${TARGET_PROJECT}/secrets/${PREFIX}-git-pat/versions/1` as `git_t
 In Path 1 Enterprise, set `TARGET_PROJECT` to `<prefix>-<suffix>-data-etl` right after `data/enterprise/01-platform` finishes.
 Destroying `data/enterprise/01-platform` removes `<prefix>-<suffix>-data-etl` and that secret automatically.
 
-Write customer inputs only into gitignored `custom.auto.tfvars` or `envs/<env>.tfvars` files.
-Never commit customer IDs into tracked files.
+Write customer inputs into gitignored `custom.auto.tfvars` or tracked `envs/<env>.tfvars` inside private customer repos.
+Keep `terraform.tfvars` and `*.auto.tfvars*` gitignored, and never commit customer IDs to public forks.
 
 ## Step 3: Execute Stages, Link Outputs, and Tear Down Safely
 
