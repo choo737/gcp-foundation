@@ -2,7 +2,7 @@
 
 This module wires Security Command Center v2 exports, alerts, mute rules, and posture guardrails.
 
-Google deprecated the SCC Enterprise tier in May 2026.
+Google retires the SCC Enterprise tier on May 21, 2027.
 Only `STANDARD` (free) and `PREMIUM` (paid) remain active tiers.
 
 ## Tier Capabilities

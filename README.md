@@ -4,10 +4,7 @@ Modular Google Cloud landing zone and Medallion data platform deployed with Terr
 
 ## Template Suite Overview
 
-<picture>
-  <source type="image/webp" srcset="assets/cloud-city-foundation.webp">
-  <img src="assets/cloud-city-foundation.gif" alt="Layer 01 foundation overview" width="100%">
-</picture>
+<img src="assets/cloud-city-foundation.webp" alt="Layer 01 foundation overview" width="100%">
 
 `gcp-foundation` owns **Layer 01**: folders, IAM, 36 Org Policies, KMS keys, and Shared VPC networking.
 It also sets up VPC Service Controls, Security Command Center, and locked audit log sinks.

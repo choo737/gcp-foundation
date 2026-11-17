@@ -274,7 +274,7 @@ variable "budget_thresholds" {
 variable "enable_forecasted_threshold" {
   type        = bool
   default     = true
-  description = "Whether Cloud Billing budgets include a 110% forecasted-spend threshold."
+  description = "Whether Cloud Billing budgets include a 100% forecasted-spend threshold."
 }
 
 variable "disable_default_iam_recipients" {

@@ -15,7 +15,7 @@ This stage deploys folders, the audit project, locked logging, FinOps, and Secur
 
 ## Tiered Security Command Center
 
-Google deprecated the SCC Enterprise tier in May 2026.
+Google retires the SCC Enterprise tier on May 21, 2027.
 Only `STANDARD` (free) and `PREMIUM` (paid) remain active tiers.
 
 - `STANDARD` deploys regional BigQuery findings export (`var.region`), Pub/Sub alerts, Monitoring policy, and non-prod mutes.

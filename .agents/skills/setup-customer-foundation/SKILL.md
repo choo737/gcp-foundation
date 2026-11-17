@@ -64,7 +64,7 @@ Collect the required variables before creating `custom.auto.tfvars` or `envs/<en
 - Keep `prefix` to 3-6 lowercase alphanumeric chars and set `project_suffix` (`dev01`, `stg01`, `prd01`).
 - Offer optional `gcloud` lookup commands (`gcloud organizations list`, `gcloud billing accounts list`) only if asked.
 - If `enable_org_policies = true`, collect `allowed_policy_member_domains` and `allowed_contact_domains`.
-- Ask for `scc_tier` (`NONE`, `STANDARD` free, or `PREMIUM` paid; Enterprise retired May 2026).
+- Ask for `scc_tier` (`NONE`, `STANDARD` free, or `PREMIUM` paid; Enterprise retires May 21, 2027).
 - Keep `scc_location` at `global` unless data residency needs `us`, `eu`, or `sa`; BigQuery stays in `region`.
 
 Ask whether this is a **production** or **ephemeral test** deployment:
@@ -166,12 +166,12 @@ If `bq` is missing from default `$PATH`, add the Cloud SDK bin path first:
 command -v bq >/dev/null || export PATH="${HOME}/google-cloud-sdk/bin:${PATH}"
 ```
 
-Verify FinOps resources from Stage 01:
+Verify FinOps resources from Stage 01 (use `AUDIT_PROJECT_ID` when `create_dedicated_finops_project=false`):
 
 ```bash
-bq show --dataset "${AUDIT_PROJECT_ID}:${PREFIX//-/_}_billing_export"
-gcloud billing budgets list --billing-account="${BILLING_ACCOUNT}" --billing-project="${AUDIT_PROJECT_ID}"
-gcloud pubsub topics describe "${PREFIX}-finops-budget-alerts" --project="${AUDIT_PROJECT_ID}"
+bq show --dataset "${FINOPS_PROJECT_ID}:${PREFIX//-/_}_billing_export"
+gcloud billing budgets list --billing-account="${BILLING_ACCOUNT}" --billing-project="${FINOPS_PROJECT_ID}"
+gcloud pubsub topics describe "${PREFIX}-finops-budget-alerts" --project="${FINOPS_PROJECT_ID}"
 ```
 
 When `enable_org_policies = true`, list active Org Policy rules on the root folder:
