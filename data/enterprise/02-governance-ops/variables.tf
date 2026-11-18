@@ -169,9 +169,27 @@ variable "additional_dataform_repos" {
     git_token_secret_version = optional(string, "")
     cron_schedule            = optional(string, "0 2 * * *")
     time_zone                = optional(string, "Asia/Kuala_Lumpur")
+    gold_project             = optional(string, "")
+    gold_dataset             = optional(string, "")
   }))
   default     = {}
   description = "Optional map of additional Dataform repositories for multi-BU ingestion teams."
+
+  validation {
+    condition = alltrue([
+      for r in values(var.additional_dataform_repos) :
+      r.git_token_secret_version == "" || can(regex("^projects/[^/]+/secrets/[^/]+/versions/[^/]+$", r.git_token_secret_version))
+    ])
+    error_message = "Every non-empty additional_dataform_repos.git_token_secret_version must match projects/<project>/secrets/<secret>/versions/<version>."
+  }
+
+  validation {
+    condition = alltrue([
+      for r in values(var.additional_dataform_repos) :
+      trimspace(r.git_url) == "" || trimspace(r.git_token_secret_version) != ""
+    ])
+    error_message = "Each additional_dataform_repos entry with git_url set must also set git_token_secret_version."
+  }
 }
 
 variable "enable_quality_scan" {

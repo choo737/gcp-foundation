@@ -84,11 +84,11 @@ module "audit_project" {
       "pubsub.googleapis.com",
       "bigquery.googleapis.com",
       "essentialcontacts.googleapis.com",
+      "monitoring.googleapis.com",
     ],
     var.enable_audit_cmek ? ["cloudkms.googleapis.com"] : [],
     local.effective_scc_tier != "NONE" ? [
       "securitycenter.googleapis.com",
-      "monitoring.googleapis.com",
     ] : [],
     local.effective_scc_tier == "PREMIUM" ? concat(
       ["securitycentermanagement.googleapis.com"],

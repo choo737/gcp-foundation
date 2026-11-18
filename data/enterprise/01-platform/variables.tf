@@ -48,6 +48,11 @@ variable "domain_billing_accounts" {
   type        = map(string)
   default     = {}
   description = "Optional map of domain codes to dedicated Cloud Billing account IDs overriding var.billing_account."
+
+  validation {
+    condition     = alltrue([for v in values(var.domain_billing_accounts) : trimspace(v) != ""])
+    error_message = "Every value in domain_billing_accounts must be a non-empty Cloud Billing account ID."
+  }
 }
 
 variable "prefix" {

@@ -24,6 +24,8 @@ data "google_project" "domains" {
   project_id = each.value
 }
 
+data "google_client_openid_userinfo" "caller" {}
+
 locals {
   effective_kms_key_id       = var.kms_key_id != null ? trimspace(var.kms_key_id) : ""
   use_cmek                   = local.effective_kms_key_id != ""
@@ -122,6 +124,13 @@ locals {
   ]
 
   env_labels = merge(var.labels, { environment = var.environment })
+
+  caller_email = trimspace(data.google_client_openid_userinfo.caller.email)
+  caller_member = local.caller_email != "" ? (
+    endswith(local.caller_email, ".gserviceaccount.com")
+    ? "serviceAccount:${local.caller_email}"
+    : "user:${local.caller_email}"
+  ) : ""
 }
 
 resource "google_project_service_identity" "dataform_agent" {
@@ -227,6 +236,17 @@ resource "google_bigquery_datapolicy_data_policy_iam_member" "dataplex_masked_re
   member         = google_project_service_identity.dataplex_agent.member
 
   depends_on = [time_sleep.service_identity_propagation]
+}
+
+# Dataplex DataScanBigQueryValidator runs a BigQuery dry-run as the Terraform caller.
+resource "google_bigquery_datapolicy_data_policy_iam_member" "caller_masked_reader" {
+  count = local.caller_member != "" ? 1 : 0
+
+  project        = var.governance_project_id
+  location       = var.region
+  data_policy_id = local.effective_data_policy_short_id
+  role           = "roles/bigquerydatapolicy.maskedReader"
+  member         = local.caller_member
 }
 
 resource "google_bigquery_dataset_iam_member" "dataplex_gold_viewer" {
@@ -421,8 +441,8 @@ module "additional_dataform_repository" {
   bronze_dataset            = var.bronze_dataset_id
   silver_project            = var.core_storage_project_id
   silver_dataset            = var.silver_dataset_id
-  gold_project              = var.primary_gold_project_id
-  gold_dataset              = var.primary_gold_dataset_id
+  gold_project              = trimspace(each.value.gold_project) != "" ? trimspace(each.value.gold_project) : var.primary_gold_project_id
+  gold_dataset              = trimspace(each.value.gold_dataset) != "" ? trimspace(each.value.gold_dataset) : var.primary_gold_dataset_id
   assertion_schema          = var.assertions_dataset_id
   pii_policy_tag            = var.pii_masked_policy_tag_id
   pii_masked_policy_tag     = var.pii_masked_policy_tag_id
@@ -910,6 +930,7 @@ resource "time_sleep" "dataplex_iam_propagation" {
   depends_on = [
     time_sleep.iam_and_kms_propagation,
     google_bigquery_datapolicy_data_policy_iam_member.dataplex_masked_reader,
+    google_bigquery_datapolicy_data_policy_iam_member.caller_masked_reader,
     google_bigquery_dataset_iam_member.dataplex_gold_viewer,
     google_bigquery_dataset_iam_member.dataplex_domain_gold_viewer,
     google_bigquery_dataset_iam_member.dataplex_silver_viewer,

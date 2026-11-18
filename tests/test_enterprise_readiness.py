@@ -575,7 +575,9 @@ class EnterpriseReadinessTest(unittest.TestCase):
         for out_name in ("org_gov_ci_sa_email", "net_sec_ci_sa_email", "data_plat_ci_sa_email"):
             self.assertIn(f'output "{out_name}"', boot_outs)
         self.assertIn('resource "google_storage_bucket_iam_member" "tfstate_scoped_admin"', boot_main)
-        self.assertIn('resource.type != \\"storage.googleapis.com/Object\\"', boot_main)
+        self.assertIn('api.getAttribute(\\"storage.googleapis.com/objectListPrefix\\", \\"\\").startsWith(\\"${each.value}\\")', boot_main)
+        self.assertIn('api.getAttribute(\\"storage.googleapis.com/objectListPrefix\\", \\"\\").startsWith(\\"ingestion/\\")', boot_main)
+        self.assertNotIn('resource.type != \\"storage.googleapis.com/Object\\"', boot_main)
         self.assertIn('resource "google_storage_bucket_iam_member" "iac_outputs_ingestion_viewer"', boot_main)
 
         wif_vars = (REPO_ROOT / "modules/foundation/github-wif/variables.tf").read_text(encoding="utf-8")
@@ -695,6 +697,335 @@ class EnterpriseReadinessTest(unittest.TestCase):
                     )
                     self.assertEqual(res.returncode, 0, res.stderr)
                     self.assertEqual(res.stdout.strip().strip('"'), expected)
+
+    def test_pass7_stage_chaining_tier_l_wif_validations_and_iam(self) -> None:
+        script_path = REPO_ROOT / "scripts" / "link-stages.sh"
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            bin_dir = tmp_path / "bin"
+            gcs_store = tmp_path / "gcs_store"
+            src_shared = tmp_path / "stage_shared"
+            dst = tmp_path / "stage_dst"
+            for d in (bin_dir, gcs_store, src_shared, dst):
+                d.mkdir()
+
+            (dst / "variables.tf").write_text(
+                'variable "environment" {\n  type = string\n}\n'
+                'variable "data_folder_id" {\n  type = string\n}\n'
+                'variable "kms_key_id" {\n  type = string\n}\n'
+                'variable "core_storage_project_id" {\n  type = string\n}\n'
+                'variable "dataform_repository_name" {\n  type = string\n}\n',
+                encoding="utf-8",
+            )
+
+            tf_call_log = tmp_path / "tf_calls.log"
+            tf_shim = bin_dir / "terraform"
+            tf_shim.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, os, sys\n"
+                "with open(os.environ['TF_CALL_LOG'], 'a', encoding='utf-8') as f:\n"
+                "    f.write(' '.join(sys.argv[1:]) + '\\n')\n"
+                "print(json.dumps({'data_folder_id': {'value': 'folders/999'}}))\n",
+                encoding="utf-8",
+            )
+            tf_shim.chmod(0o755)
+
+            gcloud_shim = bin_dir / "gcloud"
+            gcloud_shim.write_text(
+                "#!/usr/bin/env python3\n"
+                "import os, shutil, sys\n"
+                "from pathlib import Path\n"
+                "store = Path(os.environ['TEST_GCS_STORE'])\n"
+                "args = sys.argv[1:]\n"
+                "if args[1] == 'cp':\n"
+                "    target = store / args[3].removeprefix('gs://')\n"
+                "    target.parent.mkdir(parents=True, exist_ok=True)\n"
+                "    shutil.copyfile(args[2], target)\n"
+                "elif args[1] == 'cat':\n"
+                "    sys.stdout.write((store / args[2].removeprefix('gs://')).read_text(encoding='utf-8'))\n",
+                encoding="utf-8",
+            )
+            gcloud_shim.chmod(0o755)
+
+            env = os.environ.copy()
+            env["PATH"] = f"{bin_dir}:{env['PATH']}"
+            env["TEST_GCS_STORE"] = str(gcs_store)
+            env["TF_CALL_LOG"] = str(tf_call_log)
+
+            # 1) --env shared exports to shared/01-org-governance-outputs.json.
+            shared_res = subprocess.run(
+                [str(script_path), "--env", "shared", "--export-gcs", "gs://bkt/01-org-governance-outputs.json", str(src_shared)],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(shared_res.returncode, 0, shared_res.stderr)
+            shared_obj = gcs_store / "bkt" / "shared" / "01-org-governance-outputs.json"
+            self.assertTrue(shared_obj.is_file())
+            self.assertEqual(
+                json.loads(shared_obj.read_text(encoding="utf-8")),
+                {"data_folder_id": "folders/999", "environment": "shared"},
+            )
+
+            # 2) Seed dev stage JSONs and test --from-gcs preserving shared/ while setting environment='dev'.
+            for name, payload in (
+                ("02-security-network-outputs.json", {"environment": "dev", "kms_key_id": "k-dev"}),
+                ("01-platform-outputs.json", {"environment": "dev", "core_storage_project_id": "core-dev"}),
+                ("02-governance-ops-outputs.json", {"environment": "dev", "dataform_repository_name": "df-dev"}),
+            ):
+                p = gcs_store / "bkt" / "dev" / name
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(json.dumps(payload), encoding="utf-8")
+
+            from_res = subprocess.run(
+                [
+                    str(script_path),
+                    "--env",
+                    "dev",
+                    "--from-gcs",
+                    "gs://bkt/shared/01-org-governance-outputs.json",
+                    "gs://bkt/02-security-network-outputs.json",
+                    str(dst),
+                ],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(from_res.returncode, 0, from_res.stderr)
+            linked = json.loads((dst / "00_linked.auto.tfvars.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                linked,
+                {"data_folder_id": "folders/999", "environment": "dev", "kms_key_id": "k-dev"},
+            )
+
+            # 3) --export-gcs + --from-gcs merges GCS JSONs directly with zero terraform invocations.
+            tf_call_log.unlink()
+            merge_res = subprocess.run(
+                [
+                    str(script_path),
+                    "--env",
+                    "dev",
+                    "--export-gcs",
+                    "gs://bkt/foundation-outputs.json",
+                    "--from-gcs",
+                    "gs://bkt/shared/01-org-governance-outputs.json",
+                    "gs://bkt/02-security-network-outputs.json",
+                    "gs://bkt/01-platform-outputs.json",
+                    "gs://bkt/02-governance-ops-outputs.json",
+                ],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(merge_res.returncode, 0, merge_res.stderr)
+            self.assertFalse(tf_call_log.exists(), "JSON-merge mode must not invoke terraform")
+            merged_out = json.loads((gcs_store / "bkt" / "dev" / "foundation-outputs.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                merged_out,
+                {
+                    "core_storage_project_id": "core-dev",
+                    "data_folder_id": "folders/999",
+                    "dataform_repository_name": "df-dev",
+                    "environment": "dev",
+                    "kms_key_id": "k-dev",
+                },
+            )
+
+            # 4) Reverse flag order (--from-gcs before --export-gcs) works identically.
+            rev_merge_res = subprocess.run(
+                [
+                    str(script_path),
+                    "--env",
+                    "dev",
+                    "--from-gcs",
+                    "gs://bkt/shared/01-org-governance-outputs.json",
+                    "gs://bkt/02-security-network-outputs.json",
+                    "--export-gcs",
+                    "gs://bkt/reverse-merged.json",
+                ],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(rev_merge_res.returncode, 0, rev_merge_res.stderr)
+            self.assertEqual(
+                json.loads((gcs_store / "bkt" / "dev" / "reverse-merged.json").read_text(encoding="utf-8")),
+                {"data_folder_id": "folders/999", "environment": "dev", "kms_key_id": "k-dev"},
+            )
+
+            # 5) Invalid --env rejected by ^(shared|dev|staging|prod)$.
+            bad_env = subprocess.run(
+                [str(script_path), "--env", "qa", "--from-gcs", "gs://bkt/shared/01-org-governance-outputs.json", str(dst)],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(bad_env.returncode, 0)
+
+        # Bug #1, #2, #3 in terraform-deploy.yml and github-wif/main.tf.
+        deploy_wf = (REPO_ROOT / ".github/workflows/terraform-deploy.yml").read_text(encoding="utf-8")
+        self.assertIn("environment: shared", deploy_wf)
+        self.assertIn("vars.GCP_ORG_GOV_WIF_SA", deploy_wf)
+        self.assertIn("vars.GCP_NET_SEC_WIF_SA", deploy_wf)
+        self.assertIn("vars.GCP_DATA_PLAT_WIF_SA", deploy_wf)
+        self.assertNotIn("foundation-outputs.json\" \"${TARGET_STAGE}\" || true", deploy_wf)
+        self.assertNotIn("--tfstate-bucket \"${TFSTATE_BUCKET}\" --export-gcs", deploy_wf)
+        self.assertIn("shared/01-org-governance-outputs.json", deploy_wf)
+        self.assertIn("02-security-network-outputs.json", deploy_wf)
+        self.assertIn("01-platform-outputs.json", deploy_wf)
+        self.assertIn("02-governance-ops-outputs.json", deploy_wf)
+
+        wif_main = (REPO_ROOT / "modules/foundation/github-wif/main.tf").read_text(encoding="utf-8")
+        self.assertIn("(!('environment' in assertion) || assertion.environment in [${local.env_list_cel}])", wif_main)
+
+        # Polish #4 & #6: additional_dataform_repos gold overrides & validations + domain_billing_accounts validation.
+        gov_vars = (REPO_ROOT / "data/enterprise/02-governance-ops/variables.tf").read_text(encoding="utf-8")
+        gov_main = (REPO_ROOT / "data/enterprise/02-governance-ops/main.tf").read_text(encoding="utf-8")
+        self.assertIn('gold_project             = optional(string, "")', gov_vars)
+        self.assertIn('gold_dataset             = optional(string, "")', gov_vars)
+        self.assertIn("trimspace(r.git_url) == \"\" || trimspace(r.git_token_secret_version) != \"\"", gov_vars)
+        self.assertIn("trimspace(each.value.gold_project) != \"\" ? trimspace(each.value.gold_project) : var.primary_gold_project_id", gov_main)
+        self.assertIn("trimspace(each.value.gold_dataset) != \"\" ? trimspace(each.value.gold_dataset) : var.primary_gold_dataset_id", gov_main)
+
+        plat_vars = (REPO_ROOT / "data/enterprise/01-platform/variables.tf").read_text(encoding="utf-8")
+        self.assertRegex(plat_vars, r'variable\s+"domain_billing_accounts"[\s\S]*?validation\s*\{[\s\S]*?trimspace\(v\)\s*!=\s*""')
+
+        # Exercise Terraform variable validations for additional_dataform_repos and domain_billing_accounts.
+        import shutil
+        tf_bin = shutil.which("terraform")
+        if tf_bin is not None:
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp_repo = Path(tmp) / "repo"
+                shutil.copytree(REPO_ROOT / "modules", tmp_repo / "modules")
+                shutil.copytree(REPO_ROOT / "data", tmp_repo / "data")
+
+                gov_dir = tmp_repo / "data" / "enterprise" / "02-governance-ops"
+                gov_versions = gov_dir / "versions.tf"
+                gov_versions.write_text(
+                    gov_versions.read_text(encoding="utf-8").replace('backend "gcs" {}', 'backend "local" {}'),
+                    encoding="utf-8",
+                )
+                shutil.rmtree(gov_dir / ".terraform", ignore_errors=True)
+                gov_cached = REPO_ROOT / "data" / "enterprise" / "02-governance-ops" / ".terraform" / "providers"
+                gov_init = [tf_bin, f"-chdir={gov_dir}", "init", "-input=false"]
+                if gov_cached.is_dir():
+                    gov_init.append(f"-plugin-dir={gov_cached}")
+                self.assertEqual(subprocess.run(gov_init, capture_output=True, text=True, check=False).returncode, 0)
+
+                base_gov_tfvars = {
+                    "governance_project_id": "gov-proj-1",
+                    "core_storage_project_id": "core-proj-1",
+                    "primary_gold_project_id": "gold-proj-1",
+                    "etl_compute_project_id": "etl-proj-1",
+                    "bronze_dataset_id": "bronze",
+                    "silver_dataset_id": "silver",
+                    "assertions_dataset_id": "assertions",
+                    "primary_gold_dataset_id": "gold",
+                    "pii_masked_policy_tag_id": "projects/gov-proj-1/locations/asia-southeast1/taxonomies/1/policyTags/1",
+                    "pii_restricted_policy_tag_id": "projects/gov-proj-1/locations/asia-southeast1/taxonomies/1/policyTags/2",
+                }
+                gov_tfvars_path = gov_dir / "val_test.auto.tfvars.json"
+
+                gov_tfvars_path.write_text(
+                    json.dumps({
+                        **base_gov_tfvars,
+                        "additional_dataform_repos": {
+                            "retail": {
+                                "git_url": "https://github.com/org/retail.git",
+                                "git_token_secret_version": "projects/gov-proj-1/secrets/tok/versions/1",
+                                "gold_project": "retail-gold-proj",
+                                "gold_dataset": "retail_gold",
+                            }
+                        },
+                    }),
+                    encoding="utf-8",
+                )
+                ok_gov = subprocess.run(
+                    [tf_bin, f"-chdir={gov_dir}", "console"],
+                    input="var.additional_dataform_repos[\"retail\"].gold_project\n",
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(ok_gov.returncode, 0, ok_gov.stderr)
+                self.assertEqual(ok_gov.stdout.strip().strip('"'), "retail-gold-proj")
+
+                gov_tfvars_path.write_text(
+                    json.dumps({
+                        **base_gov_tfvars,
+                        "additional_dataform_repos": {
+                            "retail": {"git_url": "https://github.com/org/retail.git"}
+                        },
+                    }),
+                    encoding="utf-8",
+                )
+                missing_tok = subprocess.run(
+                    [tf_bin, f"-chdir={gov_dir}", "console"],
+                    input="keys(var.additional_dataform_repos)\n",
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertIn("Invalid value for variable", missing_tok.stderr)
+                self.assertIn("git_token_secret_version", missing_tok.stderr)
+
+                gov_tfvars_path.write_text(
+                    json.dumps({
+                        **base_gov_tfvars,
+                        "additional_dataform_repos": {
+                            "retail": {
+                                "git_url": "https://github.com/org/retail.git",
+                                "git_token_secret_version": "not-a-secret-version",
+                            }
+                        },
+                    }),
+                    encoding="utf-8",
+                )
+                bad_tok = subprocess.run(
+                    [tf_bin, f"-chdir={gov_dir}", "console"],
+                    input="keys(var.additional_dataform_repos)\n",
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertIn("Invalid value for variable", bad_tok.stderr)
+                self.assertIn("projects/<project>/secrets/<secret>/versions/<version>", bad_tok.stderr)
+
+                plat_dir = tmp_repo / "data" / "enterprise" / "01-platform"
+                plat_versions = plat_dir / "versions.tf"
+                plat_versions.write_text(
+                    plat_versions.read_text(encoding="utf-8").replace('backend "gcs" {}', 'backend "local" {}'),
+                    encoding="utf-8",
+                )
+                shutil.rmtree(plat_dir / ".terraform", ignore_errors=True)
+                plat_cached = REPO_ROOT / "data" / "enterprise" / "01-platform" / ".terraform" / "providers"
+                plat_init = [tf_bin, f"-chdir={plat_dir}", "init", "-input=false"]
+                if plat_cached.is_dir():
+                    plat_init.append(f"-plugin-dir={plat_cached}")
+                self.assertEqual(subprocess.run(plat_init, capture_output=True, text=True, check=False).returncode, 0)
+
+                (plat_dir / "billing_val.auto.tfvars.json").write_text(
+                    json.dumps({
+                        "data_folder_id": "folders/123456",
+                        "billing_account": "000000-000000-000000",
+                        "domain_billing_accounts": {"fin": "   "},
+                    }),
+                    encoding="utf-8",
+                )
+                bad_billing = subprocess.run(
+                    [tf_bin, f"-chdir={plat_dir}", "console"],
+                    input="keys(var.domain_billing_accounts)\n",
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertIn("Invalid value for variable", bad_billing.stderr)
+                self.assertIn("domain_billing_accounts", bad_billing.stderr)
 
 
 if __name__ == "__main__":

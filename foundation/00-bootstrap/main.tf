@@ -199,7 +199,7 @@ resource "google_storage_bucket_iam_member" "tfstate_scoped_admin" {
   condition {
     title       = "${each.key}_tfstate_prefix"
     description = "Restrict Terraform state access to ${each.value} prefix."
-    expression  = "resource.type != \"storage.googleapis.com/Object\" || resource.name.startsWith(\"projects/_/buckets/${google_storage_bucket.tfstate.name}/objects/${each.value}\")"
+    expression  = "(resource.type == \"storage.googleapis.com/Bucket\" && (api.getAttribute(\"storage.googleapis.com/objectListPrefix\", \"\").startsWith(\"${each.value}\") || api.getAttribute(\"storage.googleapis.com/objectListPrefix\", \"\") == \"${trimsuffix(each.value, "/")}\")) || (resource.type == \"storage.googleapis.com/Object\" && resource.name.startsWith(\"projects/_/buckets/${google_storage_bucket.tfstate.name}/objects/${each.value}\"))"
   }
 }
 
@@ -229,7 +229,7 @@ resource "google_storage_bucket_iam_member" "iac_outputs_ingestion_prefix_admin"
   condition {
     title       = "tf_ingestion_ci_outputs_prefix"
     description = "Allow ingestion CI to export outputs under ingestion/ prefix."
-    expression  = "resource.type != \"storage.googleapis.com/Object\" || resource.name.startsWith(\"projects/_/buckets/${google_storage_bucket.iac_outputs.name}/objects/ingestion/\")"
+    expression  = "(resource.type == \"storage.googleapis.com/Bucket\" && (api.getAttribute(\"storage.googleapis.com/objectListPrefix\", \"\").startsWith(\"ingestion/\") || api.getAttribute(\"storage.googleapis.com/objectListPrefix\", \"\") == \"ingestion\")) || (resource.type == \"storage.googleapis.com/Object\" && resource.name.startsWith(\"projects/_/buckets/${google_storage_bucket.iac_outputs.name}/objects/ingestion/\"))"
   }
 }
 

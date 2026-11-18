@@ -7,6 +7,7 @@ Usage:
   scripts/link-stages.sh [--env <env>] [--tfstate-bucket <bucket>] <source_stage_dir> [<source_stage_dir> ...] <target_stage_dir>
   scripts/link-stages.sh [--env <env>] [--tfstate-bucket <bucket>] --export-gcs gs://<bucket>/<stage>.json <source_stage_dir> [<source_stage_dir> ...]
   scripts/link-stages.sh [--env <env>] --from-gcs gs://<bucket>/<stage1>.json [gs://<bucket>/<stage2>.json ...] <target_stage_dir>
+  scripts/link-stages.sh [--env <env>] --export-gcs gs://<bucket>/<merged>.json --from-gcs gs://<bucket>/<stage1>.json [gs://<bucket>/<stage2>.json ...]
 USAGE
 }
 
@@ -30,7 +31,8 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 env_name=""
 tfstate_bucket="${TFSTATE_BUCKET:-${GCP_TFSTATE_BUCKET:-${TF_STATE_BUCKET:-}}}"
 tfstate_bucket_explicit=false
-mode="local"
+export_gcs=false
+from_gcs=false
 gcs_export_uri=""
 positional=()
 
@@ -63,20 +65,32 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     --export-gcs)
-      if [ "$#" -lt 2 ] || [ "$mode" != "local" ]; then
+      if [ "$#" -lt 2 ] || [ "$export_gcs" = true ] || [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
         usage
         exit 1
       fi
-      mode="export-gcs"
+      export_gcs=true
       gcs_export_uri="$2"
       shift 2
       ;;
-    --from-gcs)
-      if [ "$mode" != "local" ]; then
+    --export-gcs=*)
+      if [ "$export_gcs" = true ]; then
         usage
         exit 1
       fi
-      mode="from-gcs"
+      export_gcs=true
+      gcs_export_uri="${1#--export-gcs=}"
+      if [ -z "$gcs_export_uri" ] || [[ "$gcs_export_uri" == -* ]]; then
+        die_usage "Missing or empty value for --export-gcs"
+      fi
+      shift
+      ;;
+    --from-gcs)
+      if [ "$from_gcs" = true ]; then
+        usage
+        exit 1
+      fi
+      from_gcs=true
       shift
       ;;
     -h|--help)
@@ -91,7 +105,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ -n "$env_name" ]; then
-  if [[ ! "$env_name" =~ ^[a-z0-9][a-z0-9-]{0,30}$ ]]; then
+  if [[ ! "$env_name" =~ ^(shared|dev|staging|prod)$ ]]; then
     echo "Invalid --env value: $env_name" >&2
     exit 1
   fi
@@ -103,6 +117,122 @@ if [ -n "$tfstate_bucket" ]; then
   fi
 elif [ "$tfstate_bucket_explicit" = true ]; then
   die_usage "Missing or empty value for --tfstate-bucket"
+fi
+
+if [ "$export_gcs" = true ] && [ "$from_gcs" = true ]; then
+  if [ "${#positional[@]}" -lt 1 ]; then
+    usage
+    exit 1
+  fi
+  if [[ ! "$gcs_export_uri" =~ ^gs://[^/]+(/.*)?$ ]]; then
+    echo "Invalid GCS URI: $gcs_export_uri" >&2
+    exit 1
+  fi
+  for uri in "${positional[@]}"; do
+    if [[ ! "$uri" =~ ^gs://[^/]+(/.*)?$ ]]; then
+      echo "Invalid GCS URI: $uri" >&2
+      exit 1
+    fi
+  done
+
+  python3 - "$gcs_export_uri" "$env_name" "${positional[@]}" <<'PY'
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import tempfile
+
+raw_dest_uri = sys.argv[1]
+env_name = sys.argv[2]
+raw_sources = sys.argv[3:]
+
+
+def resolve_env_gcs_uri(uri: str, env: str) -> str:
+    if not env:
+        return uri
+    rest = uri[len("gs://"):]
+    if "/" not in rest:
+        return f"gs://{rest}/{env}/foundation-outputs.json"
+    bucket, obj = rest.split("/", 1)
+    obj = obj.lstrip("/")
+    if not obj:
+        return f"gs://{bucket}/{env}/foundation-outputs.json"
+    if obj == "shared" or obj.startswith("shared/"):
+        return uri
+    parts = obj.split("/")
+    filename = parts[-1]
+    if env in parts[:-1]:
+        return uri
+    if filename and (
+        f"-{env}." in filename
+        or filename.startswith(f"{env}-")
+        or filename == f"{env}.json"
+    ):
+        return uri
+    if obj.endswith("/"):
+        return f"gs://{bucket}/{obj}{env}/foundation-outputs.json"
+    parent = "/".join(parts[:-1])
+    if parent:
+        return f"gs://{bucket}/{parent}/{env}/{filename}"
+    return f"gs://{bucket}/{env}/{filename}"
+
+
+dest_uri = resolve_env_gcs_uri(raw_dest_uri, env_name)
+if not re.match(r"^gs://[^/]+/.+", dest_uri):
+    raise SystemExit(f"Invalid GCS URI (missing object path): {dest_uri}")
+
+merged: dict[str, object] = {}
+for raw_src_uri in raw_sources:
+    src_uri = resolve_env_gcs_uri(raw_src_uri, env_name)
+    if not re.match(r"^gs://[^/]+/.+", src_uri):
+        raise SystemExit(f"Invalid GCS URI (missing object path): {src_uri}")
+    raw = subprocess.check_output(
+        ["gcloud", "storage", "cat", src_uri],
+        text=True,
+    )
+    outputs = json.loads(raw)
+    if not isinstance(outputs, dict):
+        raise ValueError(f"Expected JSON object in {src_uri}")
+    for key, payload in outputs.items():
+        if isinstance(payload, dict) and "value" in payload and "sensitive" in payload:
+            if payload.get("sensitive") is True:
+                continue
+            val = payload.get("value")
+        else:
+            val = payload
+        if val is not None:
+            merged[key] = val
+
+if env_name:
+    merged["environment"] = env_name
+
+fd, tmp_name = tempfile.mkstemp(prefix="iac-outputs-", suffix=".json")
+tmp_path = Path(tmp_name)
+try:
+    os.chmod(tmp_path, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(json.dumps(merged, indent=2, sort_keys=True) + "\n")
+    os.chmod(tmp_path, 0o600)
+    subprocess.run(
+        ["gcloud", "storage", "cp", str(tmp_path), dest_uri],
+        check=True,
+    )
+finally:
+    if tmp_path.exists():
+        tmp_path.unlink()
+
+print(f"Merged {len(merged)} output(s) from {len(raw_sources)} GCS object(s) to {dest_uri}")
+PY
+  exit 0
+fi
+
+mode="local"
+if [ "$export_gcs" = true ]; then
+  mode="export-gcs"
+elif [ "$from_gcs" = true ]; then
+  mode="from-gcs"
 fi
 
 if [ "$mode" = "export-gcs" ]; then
@@ -149,6 +279,8 @@ def resolve_env_gcs_uri(uri: str, env: str) -> str:
     obj = obj.lstrip("/")
     if not obj:
         return f"gs://{bucket}/{env}/foundation-outputs.json"
+    if obj == "shared" or obj.startswith("shared/"):
+        return uri
     parts = obj.split("/")
     filename = parts[-1]
     if env in parts[:-1]:
@@ -312,6 +444,8 @@ def resolve_env_gcs_uri(uri: str, env: str) -> str:
     obj = obj.lstrip("/")
     if not obj:
         return f"gs://{bucket}/{env}/foundation-outputs.json"
+    if obj == "shared" or obj.startswith("shared/"):
+        return uri
     parts = obj.split("/")
     filename = parts[-1]
     if env in parts[:-1]:

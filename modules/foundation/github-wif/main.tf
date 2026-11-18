@@ -25,7 +25,7 @@ locals {
   ]
 
   ref_condition = length(local.ref_clauses) > 0 ? "(${join(" || ", local.ref_clauses)})" : ""
-  env_condition = length(var.allowed_environments) > 0 ? "assertion.environment in [${local.env_list_cel}]" : ""
+  env_condition = length(var.allowed_environments) > 0 ? "(!('environment' in assertion) || assertion.environment in [${local.env_list_cel}])" : ""
 
   attribute_condition = (
     local.owner_repo_condition != ""
