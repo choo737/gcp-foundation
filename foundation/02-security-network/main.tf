@@ -72,6 +72,7 @@ module "network_security" {
   environment                         = var.environment
   enable_cmek                         = var.enable_cmek
   kms_protection_level                = var.kms_protection_level
+  allowed_cmek_service_agents         = var.allowed_cmek_service_agents
   enable_vpc                          = var.enable_vpc
   enable_shared_vpc_host              = var.enable_shared_vpc_host
   subnet_cidr                         = var.subnet_cidr

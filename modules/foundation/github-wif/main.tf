@@ -34,13 +34,26 @@ locals {
   )
 
   sa_repo_pairs = merge([
-    for binding_key, cfg in var.service_account_bindings : {
-      for repo in cfg.repositories :
-      "${binding_key}:${repo}" => {
-        service_account_id = cfg.service_account_id
-        repository         = repo
-      }
-    }
+    for binding_key, cfg in var.service_account_bindings : merge([
+      for repo in cfg.repositories : (
+        length(cfg.environments) > 0
+        ? {
+          for env in cfg.environments :
+          "${binding_key}:${repo}:${env}" => {
+            service_account_id = cfg.service_account_id
+            repository         = repo
+            environment        = env
+          }
+        }
+        : {
+          "${binding_key}:${repo}" = {
+            service_account_id = cfg.service_account_id
+            repository         = repo
+            environment        = ""
+          }
+        }
+      )
+    ]...)
   ]...)
 }
 
@@ -65,6 +78,7 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "attribute.repository_owner" = "assertion.repository_owner"
     "attribute.ref"              = "assertion.ref"
     "attribute.environment"      = "'environment' in assertion ? assertion.environment : ''"
+    "attribute.repo_env"         = "assertion.repository + ':' + ('environment' in assertion ? assertion.environment : '')"
   }
 
   attribute_condition = local.attribute_condition
@@ -86,5 +100,9 @@ resource "google_service_account_iam_member" "wif_user" {
 
   service_account_id = each.value.service_account_id
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${each.value.repository}"
+  member = (
+    each.value.environment != ""
+    ? "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repo_env/${each.value.repository}:${each.value.environment}"
+    : "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${each.value.repository}"
+  )
 }

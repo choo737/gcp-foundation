@@ -1,9 +1,17 @@
 locals {
-  clean_access_policy_id         = replace(var.access_policy_id, "accessPolicies/", "")
-  effective_network_project_num  = var.network_project_number != null ? trimspace(var.network_project_number) : ""
-  effective_audit_project_num    = var.vpc_sc_audit_project_number != null ? trimspace(var.vpc_sc_audit_project_number) : ""
-  effective_dr_region            = var.dr_region != null ? trimspace(var.dr_region) : ""
-  create_dr_cmek                 = var.enable_cmek && local.effective_dr_region != "" && local.effective_dr_region != var.region
+  clean_access_policy_id        = replace(var.access_policy_id, "accessPolicies/", "")
+  effective_network_project_num = var.network_project_number != null ? trimspace(var.network_project_number) : ""
+  effective_audit_project_num   = var.vpc_sc_audit_project_number != null ? trimspace(var.vpc_sc_audit_project_number) : ""
+  effective_dr_region           = var.dr_region != null ? trimspace(var.dr_region) : ""
+  create_dr_cmek                = var.enable_cmek && local.effective_dr_region != "" && local.effective_dr_region != var.region
+  normalized_cmek_service_agents = distinct([
+    for raw_m in var.allowed_cmek_service_agents : (
+      startswith(trimspace(raw_m), "serviceAccount:") || startswith(trimspace(raw_m), "group:") || startswith(trimspace(raw_m), "user:")
+      ? trimspace(raw_m)
+      : "serviceAccount:${trimspace(raw_m)}"
+    )
+    if trimspace(raw_m) != ""
+  ])
   initial_vpc_sc_project_numbers = distinct(compact(concat([local.effective_network_project_num], var.perimeter_project_numbers)))
   initial_vpc_sc_resources       = [for num in local.initial_vpc_sc_project_numbers : "projects/${num}"]
 
@@ -97,6 +105,22 @@ resource "google_kms_crypto_key" "dr" {
     algorithm        = "GOOGLE_SYMMETRIC_ENCRYPTION"
     protection_level = var.kms_protection_level
   }
+}
+
+resource "google_kms_crypto_key_iam_member" "upstream_service_agents" {
+  for_each = var.enable_cmek ? toset(local.normalized_cmek_service_agents) : toset([])
+
+  crypto_key_id = google_kms_crypto_key.this[0].id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  member        = each.value
+}
+
+resource "google_kms_crypto_key_iam_member" "upstream_dr_service_agents" {
+  for_each = local.create_dr_cmek ? toset(local.normalized_cmek_service_agents) : toset([])
+
+  crypto_key_id = google_kms_crypto_key.dr[0].id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  member        = each.value
 }
 
 resource "google_compute_network" "this" {

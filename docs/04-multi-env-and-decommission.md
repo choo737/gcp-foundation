@@ -63,6 +63,17 @@ done
 
 Destroy `gcp-data-ingestion` before `gcp-foundation` so Cloud Run Direct VPC Egress jobs release Shared VPC addresses first.
 Google Cloud holds `serverless-ipv4-cloudrun-*` internal IP reservations for roughly 60 minutes after deleting a Cloud Run job.
+Follow this Shared VPC teardown order before unlinking billing or deleting host and service projects:
+
+1. Delete all Cloud Run Direct VPC Egress jobs and services in `gcp-data-ingestion` first.
+2. Remove every attached Shared VPC service project before destroying the host network project.
+3. Run `gcloud compute shared-vpc disable "${HOST_PROJECT_ID}"` before unlinking billing or deleting projects.
+
+```bash
+gcloud compute shared-vpc associated-projects remove "${SERVICE_PROJECT_ID}" --host-project="${HOST_PROJECT_ID}"
+gcloud compute shared-vpc disable "${HOST_PROJECT_ID}"
+```
+
 If Shared VPC detachment reports a linked `serverless-ipv4-cloudrun-*` address, retry `01-platform` and `02-security-network` destroy after it expires.
 
 ```bash

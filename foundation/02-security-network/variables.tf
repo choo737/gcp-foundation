@@ -84,6 +84,12 @@ variable "kms_protection_level" {
   description = "Cloud KMS crypto key protection level (SOFTWARE or HSM)."
 }
 
+variable "allowed_cmek_service_agents" {
+  type        = list(string)
+  default     = []
+  description = "Optional upstream service agents or service accounts granted Cloud KMS EncrypterDecrypter on primary and DR CMEK keys."
+}
+
 variable "enable_vpc" {
   type        = bool
   default     = false

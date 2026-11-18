@@ -168,6 +168,12 @@ variable "workflow_cron_schedule" {
   description = "Cron schedule used when enable_scheduled_workflow is true."
 }
 
+variable "time_zone" {
+  type        = string
+  default     = "Asia/Kuala_Lumpur"
+  description = "IANA time zone for Dataform release and workflow schedules."
+}
+
 variable "extra_compilation_vars" {
   type        = map(string)
   default     = {}

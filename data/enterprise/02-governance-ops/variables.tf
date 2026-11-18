@@ -84,6 +84,12 @@ variable "kms_key_id" {
   description = "Optional regional CMEK crypto key resource ID from stage 01."
 }
 
+variable "manage_kms_iam" {
+  type        = bool
+  default     = true
+  description = "Whether Terraform manages Cloud KMS IAM bindings on kms_key_id."
+}
+
 variable "vpc_sc_perimeter_name" {
   type        = string
   default     = ""
@@ -94,6 +100,12 @@ variable "enforce_vpc_sc" {
   type        = bool
   default     = false
   description = "Whether the VPC-SC perimeter is in enforced mode instead of dry-run mode."
+}
+
+variable "manage_vpc_sc" {
+  type        = bool
+  default     = true
+  description = "Whether Terraform manages Dataform VPC-SC perimeter ingress policies."
 }
 
 variable "environment" {
@@ -147,6 +159,19 @@ variable "enable_scheduled_workflow" {
   type        = bool
   default     = false
   description = "Whether to enable a standalone Dataform workflow schedule (false when Cloud Workflows triggers runs)."
+}
+
+variable "additional_dataform_repos" {
+  type = map(object({
+    git_url                  = optional(string, "")
+    git_branch               = optional(string, "main")
+    git_release_commitish    = optional(string, "main")
+    git_token_secret_version = optional(string, "")
+    cron_schedule            = optional(string, "0 2 * * *")
+    time_zone                = optional(string, "Asia/Kuala_Lumpur")
+  }))
+  default     = {}
+  description = "Optional map of additional Dataform repositories for multi-BU ingestion teams."
 }
 
 variable "enable_quality_scan" {

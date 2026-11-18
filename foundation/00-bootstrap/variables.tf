@@ -31,10 +31,21 @@ variable "project_suffix" {
   }
 }
 
+variable "foundation_sa_mode" {
+  type        = string
+  default     = "single"
+  description = "Foundation CI service account mode: single (tf_foundation_ci) or per_stage (org_gov_ci, net_sec_ci, data_plat_ci)."
+
+  validation {
+    condition     = contains(["single", "per_stage"], var.foundation_sa_mode)
+    error_message = "foundation_sa_mode must be single or per_stage."
+  }
+}
+
 variable "enable_ci_service_accounts" {
   type        = bool
   default     = true
-  description = "Whether to provision dedicated tf-foundation-ci, tf-ingestion-ci, and dataform-ci service accounts."
+  description = "Whether to provision dedicated foundation, ingestion, and Dataform CI service accounts."
 }
 
 variable "enable_github_wif" {
@@ -80,15 +91,15 @@ variable "allowed_environments" {
 variable "ci_repository_map" {
   type        = map(list(string))
   default     = {}
-  description = "Per-service-account GitHub repository allowlists (keys: tf_foundation_ci, tf_ingestion_ci, dataform_ci) preventing cross-repo impersonation."
+  description = "Per-service-account GitHub repository allowlists (keys: tf_foundation_ci, org_gov_ci, net_sec_ci, data_plat_ci, tf_ingestion_ci, dataform_ci) preventing cross-repo impersonation."
 
   validation {
     condition = alltrue([
       for k, repos in var.ci_repository_map :
-      contains(["tf_foundation_ci", "tf_ingestion_ci", "dataform_ci"], k) &&
+      contains(["tf_foundation_ci", "org_gov_ci", "net_sec_ci", "data_plat_ci", "tf_ingestion_ci", "dataform_ci"], k) &&
       alltrue([for r in repos : can(regex("^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$", r))])
     ])
-    error_message = "ci_repository_map keys must be tf_foundation_ci, tf_ingestion_ci, or dataform_ci, and values must match owner/repo."
+    error_message = "ci_repository_map keys must be tf_foundation_ci, org_gov_ci, net_sec_ci, data_plat_ci, tf_ingestion_ci, or dataform_ci, and values must match owner/repo."
   }
 }
 
@@ -96,9 +107,10 @@ variable "service_account_bindings" {
   type = map(object({
     service_account_id = string
     repositories       = list(string)
+    environments       = optional(list(string), [])
   }))
   default     = {}
-  description = "Optional WIF service account impersonation bindings mapped per repository."
+  description = "Optional WIF service account impersonation bindings mapped per repository and optional environments."
 }
 
 variable "force_destroy" {

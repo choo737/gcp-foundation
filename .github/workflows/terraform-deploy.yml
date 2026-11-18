@@ -15,6 +15,7 @@ on:
         default: dev
         type: choice
         options:
+          - shared
           - dev
           - staging
           - prod
@@ -57,6 +58,65 @@ jobs:
           make validate
           python3 -m unittest discover -s tests -v
 
+  deploy-shared:
+    needs: validate
+    if: >-
+      needs.validate.result == 'success' &&
+      vars.GCP_WIF_PROVIDER != '' &&
+      (vars.GCP_WIF_SERVICE_ACCOUNT != '' || vars.GCP_TF_SA_EMAIL != '') &&
+      vars.GCP_TFSTATE_BUCKET != '' &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.environment == 'shared'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Authenticate via GitHub OIDC WIF
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_TF_SA_EMAIL }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: "1.8.5"
+          terraform_wrapper: false
+
+      - name: Terraform Plan and Apply (shared)
+        env:
+          TARGET_STAGE: ${{ inputs.stage || 'foundation/01-org-governance' }}
+          TFSTATE_BUCKET: ${{ vars.GCP_TFSTATE_BUCKET }}
+          IAC_OUTPUTS_BUCKET: ${{ vars.IAC_OUTPUTS_BUCKET }}
+        run: |
+          if [ "${TARGET_STAGE}" != "foundation/01-org-governance" ]; then
+            echo "shared environment only supports foundation/01-org-governance" >&2
+            exit 1
+          fi
+          if [[ ! "${TFSTATE_BUCKET}" =~ ^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$ ]]; then
+            echo "Invalid GCS bucket name in GCP_TFSTATE_BUCKET" >&2
+            exit 1
+          fi
+          BACKEND_PREFIX="foundation/01-org-governance/shared"
+          terraform -chdir="${TARGET_STAGE}" init -reconfigure -input=false \
+            -backend-config="bucket=${TFSTATE_BUCKET}" \
+            -backend-config="prefix=${BACKEND_PREFIX}"
+          terraform -chdir="${TARGET_STAGE}" apply -auto-approve -input=false
+          if [ -n "${IAC_OUTPUTS_BUCKET}" ]; then
+            if [[ ! "${IAC_OUTPUTS_BUCKET}" =~ ^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$ ]]; then
+              echo "Invalid GCS bucket name in IAC_OUTPUTS_BUCKET" >&2
+              exit 1
+            fi
+            ./scripts/link-stages.sh --env shared --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/01-org-governance-outputs.json" "${TARGET_STAGE}"
+          fi
+
   deploy-dev:
     needs: validate
     if: >-
@@ -82,6 +142,9 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_TF_SA_EMAIL }}
 
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
@@ -92,6 +155,7 @@ jobs:
         env:
           TARGET_STAGE: ${{ inputs.stage || 'data/enterprise/01-platform' }}
           TFSTATE_BUCKET: ${{ vars.GCP_TFSTATE_BUCKET }}
+          IAC_OUTPUTS_BUCKET: ${{ vars.IAC_OUTPUTS_BUCKET }}
         run: |
           case "${TARGET_STAGE}" in
             foundation/01-org-governance|foundation/02-security-network|data/sandbox|data/enterprise/01-platform|data/enterprise/02-governance-ops) ;;
@@ -101,13 +165,36 @@ jobs:
             echo "Invalid GCS bucket name in GCP_TFSTATE_BUCKET" >&2
             exit 1
           fi
+          if [ -n "${IAC_OUTPUTS_BUCKET}" ] && [[ ! "${IAC_OUTPUTS_BUCKET}" =~ ^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$ ]]; then
+            echo "Invalid GCS bucket name in IAC_OUTPUTS_BUCKET" >&2
+            exit 1
+          fi
+          if [ "${TARGET_STAGE}" = "foundation/01-org-governance" ]; then
+            BACKEND_PREFIX="foundation/01-org-governance/shared"
+          else
+            BACKEND_PREFIX="${TARGET_STAGE}/dev"
+          fi
+          if [ -n "${IAC_OUTPUTS_BUCKET}" ] && [ "${TARGET_STAGE}" != "foundation/01-org-governance" ]; then
+            ./scripts/link-stages.sh --env dev --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" "${TARGET_STAGE}" || true
+          fi
           terraform -chdir="${TARGET_STAGE}" init -reconfigure -input=false \
             -backend-config="bucket=${TFSTATE_BUCKET}" \
-            -backend-config="prefix=${TARGET_STAGE}/dev"
+            -backend-config="prefix=${BACKEND_PREFIX}"
           if [ -f "${TARGET_STAGE}/envs/dev.tfvars" ]; then
             terraform -chdir="${TARGET_STAGE}" apply -auto-approve -input=false -var-file="envs/dev.tfvars"
           else
             terraform -chdir="${TARGET_STAGE}" apply -auto-approve -input=false
+          fi
+          if [ -n "${IAC_OUTPUTS_BUCKET}" ]; then
+            case "${TARGET_STAGE}" in
+              foundation/02-security-network|data/enterprise/01-platform|data/enterprise/02-governance-ops)
+                STAGE_SLUG="$(basename "${TARGET_STAGE}")"
+                ./scripts/link-stages.sh --env dev --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/${STAGE_SLUG}-outputs.json" "${TARGET_STAGE}"
+                if [ "${TARGET_STAGE}" = "data/enterprise/02-governance-ops" ]; then
+                  ./scripts/link-stages.sh --env dev --tfstate-bucket "${TFSTATE_BUCKET}" --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" foundation/02-security-network data/enterprise/01-platform data/enterprise/02-governance-ops || true
+                fi
+                ;;
+            esac
           fi
 
   deploy-staging:
@@ -139,6 +226,9 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_TF_SA_EMAIL }}
 
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
@@ -149,6 +239,7 @@ jobs:
         env:
           TARGET_STAGE: ${{ inputs.stage || 'data/enterprise/01-platform' }}
           TFSTATE_BUCKET: ${{ vars.GCP_TFSTATE_BUCKET }}
+          IAC_OUTPUTS_BUCKET: ${{ vars.IAC_OUTPUTS_BUCKET }}
         run: |
           case "${TARGET_STAGE}" in
             foundation/01-org-governance|foundation/02-security-network|data/sandbox|data/enterprise/01-platform|data/enterprise/02-governance-ops) ;;
@@ -158,13 +249,36 @@ jobs:
             echo "Invalid GCS bucket name in GCP_TFSTATE_BUCKET" >&2
             exit 1
           fi
+          if [ -n "${IAC_OUTPUTS_BUCKET}" ] && [[ ! "${IAC_OUTPUTS_BUCKET}" =~ ^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$ ]]; then
+            echo "Invalid GCS bucket name in IAC_OUTPUTS_BUCKET" >&2
+            exit 1
+          fi
+          if [ "${TARGET_STAGE}" = "foundation/01-org-governance" ]; then
+            BACKEND_PREFIX="foundation/01-org-governance/shared"
+          else
+            BACKEND_PREFIX="${TARGET_STAGE}/staging"
+          fi
+          if [ -n "${IAC_OUTPUTS_BUCKET}" ] && [ "${TARGET_STAGE}" != "foundation/01-org-governance" ]; then
+            ./scripts/link-stages.sh --env staging --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" "${TARGET_STAGE}" || true
+          fi
           terraform -chdir="${TARGET_STAGE}" init -reconfigure -input=false \
             -backend-config="bucket=${TFSTATE_BUCKET}" \
-            -backend-config="prefix=${TARGET_STAGE}/staging"
+            -backend-config="prefix=${BACKEND_PREFIX}"
           if [ -f "${TARGET_STAGE}/envs/staging.tfvars" ]; then
             terraform -chdir="${TARGET_STAGE}" apply -auto-approve -input=false -var-file="envs/staging.tfvars"
           else
             terraform -chdir="${TARGET_STAGE}" apply -auto-approve -input=false
+          fi
+          if [ -n "${IAC_OUTPUTS_BUCKET}" ]; then
+            case "${TARGET_STAGE}" in
+              foundation/02-security-network|data/enterprise/01-platform|data/enterprise/02-governance-ops)
+                STAGE_SLUG="$(basename "${TARGET_STAGE}")"
+                ./scripts/link-stages.sh --env staging --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/${STAGE_SLUG}-outputs.json" "${TARGET_STAGE}"
+                if [ "${TARGET_STAGE}" = "data/enterprise/02-governance-ops" ]; then
+                  ./scripts/link-stages.sh --env staging --tfstate-bucket "${TFSTATE_BUCKET}" --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" foundation/02-security-network data/enterprise/01-platform data/enterprise/02-governance-ops || true
+                fi
+                ;;
+            esac
           fi
 
   deploy-prod:
@@ -191,6 +305,9 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_TF_SA_EMAIL }}
 
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
@@ -201,6 +318,7 @@ jobs:
         env:
           TARGET_STAGE: ${{ inputs.stage || 'data/enterprise/01-platform' }}
           TFSTATE_BUCKET: ${{ vars.GCP_TFSTATE_BUCKET }}
+          IAC_OUTPUTS_BUCKET: ${{ vars.IAC_OUTPUTS_BUCKET }}
         run: |
           case "${TARGET_STAGE}" in
             foundation/01-org-governance|foundation/02-security-network|data/sandbox|data/enterprise/01-platform|data/enterprise/02-governance-ops) ;;
@@ -210,11 +328,34 @@ jobs:
             echo "Invalid GCS bucket name in GCP_TFSTATE_BUCKET" >&2
             exit 1
           fi
+          if [ -n "${IAC_OUTPUTS_BUCKET}" ] && [[ ! "${IAC_OUTPUTS_BUCKET}" =~ ^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$ ]]; then
+            echo "Invalid GCS bucket name in IAC_OUTPUTS_BUCKET" >&2
+            exit 1
+          fi
+          if [ "${TARGET_STAGE}" = "foundation/01-org-governance" ]; then
+            BACKEND_PREFIX="foundation/01-org-governance/shared"
+          else
+            BACKEND_PREFIX="${TARGET_STAGE}/prod"
+          fi
+          if [ -n "${IAC_OUTPUTS_BUCKET}" ] && [ "${TARGET_STAGE}" != "foundation/01-org-governance" ]; then
+            ./scripts/link-stages.sh --env prod --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" "${TARGET_STAGE}" || true
+          fi
           terraform -chdir="${TARGET_STAGE}" init -reconfigure -input=false \
             -backend-config="bucket=${TFSTATE_BUCKET}" \
-            -backend-config="prefix=${TARGET_STAGE}/prod"
+            -backend-config="prefix=${BACKEND_PREFIX}"
           if [ -f "${TARGET_STAGE}/envs/prod.tfvars" ]; then
             terraform -chdir="${TARGET_STAGE}" apply -auto-approve -input=false -var-file="envs/prod.tfvars"
           else
             terraform -chdir="${TARGET_STAGE}" apply -auto-approve -input=false
+          fi
+          if [ -n "${IAC_OUTPUTS_BUCKET}" ]; then
+            case "${TARGET_STAGE}" in
+              foundation/02-security-network|data/enterprise/01-platform|data/enterprise/02-governance-ops)
+                STAGE_SLUG="$(basename "${TARGET_STAGE}")"
+                ./scripts/link-stages.sh --env prod --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/${STAGE_SLUG}-outputs.json" "${TARGET_STAGE}"
+                if [ "${TARGET_STAGE}" = "data/enterprise/02-governance-ops" ]; then
+                  ./scripts/link-stages.sh --env prod --tfstate-bucket "${TFSTATE_BUCKET}" --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" foundation/02-security-network data/enterprise/01-platform data/enterprise/02-governance-ops || true
+                fi
+                ;;
+            esac
           fi

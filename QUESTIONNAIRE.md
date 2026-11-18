@@ -53,13 +53,13 @@ BNM RMiT and regulated FSI workloads require seven-year audit retention, HSM key
 | `enable_org_policies` | `foundation/01-org-governance` | `false` | `true` | `true` |
 | `enable_data_access_audit_logs` | `foundation/01-org-governance` | `true` | `true` | `true` |
 | `create_dedicated_finops_project` | `foundation/01-org-governance` | `false` | `true` | `true` |
-| `enable_backup_dr` | `foundation/01-org-governance` | `false` | `true` | `true` |
+| `enable_backup_dr` | `foundation/01-org-governance` | `false` | `false` (opt-in `true`) | `false` (opt-in `true`) |
 | `backup_enforced_retention_days` | `foundation/01-org-governance` | `14` | `14` | `30` |
 | `lock_backup_vault` | `foundation/01-org-governance` | `false` | `false` | `false` (`true` at prod cutover) |
 | `kms_protection_level` | `foundation/02-security-network` | `"SOFTWARE"` | `"SOFTWARE"` | `"HSM"` |
 | `dr_region` | `01-org-governance`, `02-security-network`, `01-platform` | `null` | `""` | `"asia-southeast2"` |
 | `soft_delete_retention_seconds` | `00-bootstrap`, `01-platform`, `data/sandbox` | `604800` | `1209600` (14d) | `2592000` (30d) |
-| `enable_dual_region_gcs` | `data/enterprise/01-platform` | `false` | `false` | `true` (`ASYNC_TURBO`) |
+| `enable_dual_region_gcs` | `data/enterprise/01-platform` | `false` | `false` | `false` (opt-in `true`) |
 | `reservation_edition` | `data/enterprise/01-platform` | `"ENTERPRISE"` | `"ENTERPRISE"` | `"ENTERPRISE_PLUS"` |
 | `enable_dr_datasets` | `data/enterprise/01-platform` | `false` | `false` | `false` (native DR) |
 | `deletion_protection` | `01-org-governance`, `01-platform` | `false` | `false` (`dev`) / `true` (`staging`, `prod`) | `false` (`dev`) / `true` (`staging`, `prod`) |
@@ -71,6 +71,7 @@ BNM RMiT and regulated FSI workloads require seven-year audit retention, HSM key
 - Never enable `lock_audit_bucket = true` on short-lived tests unless you follow decommission steps.
 - Use `gcs_rpo = "ASYNC_TURBO"` only when critical buckets require the contractual 15-minute [Cloud Storage SLA](https://cloud.google.com/storage/sla).
 - Confirm cross-border `asia-southeast1` + `asia-southeast2` replication is permitted under BNM RMiT before enabling dual-region buckets.
+- GCS excludes `asia-southeast2` and `asia-east2` from `ASIA` dual-regions; pair `["asia-southeast1", "asia-east1"]` or stay regional.
 - Keep `enable_dr_datasets = false` and use `scripts/configure-bq-dr-replica.sh` plus `ENTERPRISE_PLUS` `reservation_secondary_location` for BigQuery DR.
 
 ## 3. Security Command Center & Posture (`foundation/01-org-governance`)
@@ -137,7 +138,7 @@ All three pools (`etl`, `bi`, `adhoc`) use `reservation_edition` (`"ENTERPRISE"`
 | Environment | `enable_reservations` | `baseline_slots` / `max_slots` | Pool Overrides (`etl` / `bi` / `adhoc`) |
 | --- | --- | --- | --- |
 | `dev` / `staging` | `true` (or `false` if no quota) | `0` / `100` | `etl_max_slots = 100`, `bi_max_slots = 100`, `adhoc_max_slots = 100` |
-| `prod` | `true` | `50` / `400` | `etl` `50`/`400`, `bi` `50`/`400`, `adhoc` `0`/`200` |
+| `prod` | `true` | `0` / `400` (`$0/mo` idle) | `etl` `0`/`400`, `bi` `0`/`400`, `adhoc` `0`/`200` |
 
 ### RBAC Google Groups & Multi-Repo WIF Scoping
 

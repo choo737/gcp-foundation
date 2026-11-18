@@ -44,6 +44,12 @@ variable "billing_account" {
   description = "Cloud Billing account ID attached to enterprise data projects."
 }
 
+variable "domain_billing_accounts" {
+  type        = map(string)
+  default     = {}
+  description = "Optional map of domain codes to dedicated Cloud Billing account IDs overriding var.billing_account."
+}
+
 variable "prefix" {
   type        = string
   default     = "ent"
@@ -90,6 +96,12 @@ variable "kms_key_id" {
   description = "Optional regional CMEK crypto key resource ID from foundation stage 02."
 }
 
+variable "manage_kms_iam" {
+  type        = bool
+  default     = true
+  description = "Whether Terraform manages Cloud KMS IAM bindings on kms_key_id and dr_kms_key_id."
+}
+
 variable "dr_kms_key_id" {
   type        = string
   default     = ""
@@ -130,6 +142,12 @@ variable "enforce_vpc_sc" {
   type        = bool
   default     = false
   description = "Whether the VPC-SC perimeter is in enforced mode instead of dry-run mode."
+}
+
+variable "manage_vpc_sc" {
+  type        = bool
+  default     = true
+  description = "Whether Terraform manages additive VPC-SC perimeter resources and ingress policies."
 }
 
 variable "domain_marts" {
@@ -196,10 +214,16 @@ variable "enable_dual_region_gcs" {
   description = "Whether to provision the landing bucket as a custom dual-region bucket."
 }
 
+variable "dual_region_location" {
+  type        = string
+  default     = ""
+  description = "Optional explicit GCS multi-region location code (ASIA, AU, CA, DE, EU, IN, IT, US) when enable_dual_region_gcs is true."
+}
+
 variable "dual_region_data_locations" {
   type        = list(string)
   default     = []
-  description = "Two GCP regions (for example [\"asia-southeast1\", \"asia-southeast2\"]) when enable_dual_region_gcs is true."
+  description = "Two GCS regions (for example [\"asia-southeast1\", \"asia-east1\"]; GCS excludes asia-southeast2 and asia-east2 from ASIA dual-regions) when enable_dual_region_gcs is true."
 }
 
 variable "gcs_rpo" {

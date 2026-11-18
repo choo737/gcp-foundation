@@ -72,7 +72,7 @@ make apply STAGE="data/enterprise/01-platform" ENV="${ENV}" TFSTATE_BUCKET="${TF
 make apply STAGE="data/enterprise/02-governance-ops" ENV="${ENV}" TFSTATE_BUCKET="${TFSTATE_BUCKET}"
 
 ./scripts/link-stages.sh --env "${ENV}" \
-  --export-gcs "gs://<iac-outputs-bucket>/foundation-${ENV}.json" \
+  --export-gcs "gs://<iac-outputs-bucket>/foundation-outputs.json" \
   foundation/02-security-network data/enterprise/01-platform data/enterprise/02-governance-ops
 ```
 

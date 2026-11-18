@@ -146,9 +146,9 @@ make apply STAGE="data/enterprise/02-governance-ops" ENV="${ENV}" TFSTATE_BUCKET
 For cross-repo CI/CD handoffs, export non-sensitive outputs to the `iac-outputs` bucket without sharing `.tfstate`:
 
 ```bash
-./scripts/link-stages.sh --env "${ENV}" --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/${ENV}-platform.json" \
+./scripts/link-stages.sh --env "${ENV}" --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" \
   foundation/02-security-network data/enterprise/01-platform data/enterprise/02-governance-ops
-./scripts/link-stages.sh --env "${ENV}" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/${ENV}-platform.json" \
+./scripts/link-stages.sh --env "${ENV}" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" \
   /path/to/gcp-data-ingestion/stages/enterprise
 ```
 

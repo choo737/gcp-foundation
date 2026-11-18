@@ -33,6 +33,6 @@ finops_alert_email_addresses    = [] # Example: ["gcp-finops-alerts@example.com"
 enable_billing_budget           = true
 monthly_budget_amount           = 500
 budget_currency_code            = "USD"
-enable_backup_dr                = true
+enable_backup_dr                = false
 backup_enforced_retention_days  = 14
 lock_backup_vault               = false

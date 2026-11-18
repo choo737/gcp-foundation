@@ -85,6 +85,11 @@ class EnterpriseReadinessTest(unittest.TestCase):
         self.assertIn("baseline_slots             = 0", plat_dev)
         self.assertIn("max_slots                  = 100", plat_dev)
         self.assertIn("deletion_protection        = true", plat_prod)
+        self.assertIn("baseline_slots       = 0", plat_prod)
+        self.assertIn("etl_baseline_slots   = 0", plat_prod)
+        self.assertIn("bi_baseline_slots    = 0", plat_prod)
+        self.assertIn("adhoc_baseline_slots = 0", plat_prod)
+        self.assertIn("$5,365.50/mo", plat_prod)
         self.assertIn("enforce_vpc_sc             = true", plat_prod)
         self.assertIn("immutable_image_tags       = true", plat_prod)
 
@@ -558,6 +563,138 @@ class EnterpriseReadinessTest(unittest.TestCase):
                     if stripped.rstrip().endswith(("|", ">", "|-", ">-")):
                         in_run_block = True
                         run_indent = indent
+
+    def test_decisions_1_to_4_and_residual_ci_doc_controls(self) -> None:
+        # Decision 1: 00-bootstrap per_stage SAs, bucket prefix IAM, and WIF environments.
+        boot_vars = (REPO_ROOT / "foundation/00-bootstrap/variables.tf").read_text(encoding="utf-8")
+        boot_main = (REPO_ROOT / "foundation/00-bootstrap/main.tf").read_text(encoding="utf-8")
+        boot_outs = (REPO_ROOT / "foundation/00-bootstrap/outputs.tf").read_text(encoding="utf-8")
+        self.assertIn('variable "foundation_sa_mode"', boot_vars)
+        for sa_key in ("tf_foundation_ci", "org_gov_ci", "net_sec_ci", "data_plat_ci", "tf_ingestion_ci", "dataform_ci"):
+            self.assertIn(f'"{sa_key}"', boot_vars)
+        for out_name in ("org_gov_ci_sa_email", "net_sec_ci_sa_email", "data_plat_ci_sa_email"):
+            self.assertIn(f'output "{out_name}"', boot_outs)
+        self.assertIn('resource "google_storage_bucket_iam_member" "tfstate_scoped_admin"', boot_main)
+        self.assertIn('resource.type != \\"storage.googleapis.com/Object\\"', boot_main)
+        self.assertIn('resource "google_storage_bucket_iam_member" "iac_outputs_ingestion_viewer"', boot_main)
+
+        wif_vars = (REPO_ROOT / "modules/foundation/github-wif/variables.tf").read_text(encoding="utf-8")
+        wif_main = (REPO_ROOT / "modules/foundation/github-wif/main.tf").read_text(encoding="utf-8")
+        self.assertIn("environments       = optional(list(string), [])", wif_vars)
+        self.assertIn("attribute.repo_env", wif_main)
+        self.assertIn("attribute.repository/${each.value.repository}", wif_main)
+
+        # Decision 2: allowed_cmek_service_agents, manage_kms_iam, manage_vpc_sc.
+        net_vars = (REPO_ROOT / "modules/foundation/network-security/variables.tf").read_text(encoding="utf-8")
+        net_main = (REPO_ROOT / "modules/foundation/network-security/main.tf").read_text(encoding="utf-8")
+        sec_vars = (REPO_ROOT / "foundation/02-security-network/variables.tf").read_text(encoding="utf-8")
+        self.assertIn('variable "allowed_cmek_service_agents"', net_vars)
+        self.assertIn('variable "allowed_cmek_service_agents"', sec_vars)
+        self.assertIn('resource "google_kms_crypto_key_iam_member" "upstream_service_agents"', net_main)
+        self.assertIn('resource "google_kms_crypto_key_iam_member" "upstream_dr_service_agents"', net_main)
+
+        plat_vars = (REPO_ROOT / "data/enterprise/01-platform/variables.tf").read_text(encoding="utf-8")
+        plat_main = (REPO_ROOT / "data/enterprise/01-platform/main.tf").read_text(encoding="utf-8")
+        gov_vars = (REPO_ROOT / "data/enterprise/02-governance-ops/variables.tf").read_text(encoding="utf-8")
+        gov_main = (REPO_ROOT / "data/enterprise/02-governance-ops/main.tf").read_text(encoding="utf-8")
+        gov_outs = (REPO_ROOT / "data/enterprise/02-governance-ops/outputs.tf").read_text(encoding="utf-8")
+
+        for text in (plat_vars, gov_vars):
+            self.assertIn('variable "manage_kms_iam"', text)
+            self.assertIn('variable "manage_vpc_sc"', text)
+        self.assertIn("local.use_cmek && var.manage_kms_iam", plat_main)
+        self.assertIn("var.manage_vpc_sc && !var.enforce_vpc_sc", plat_main)
+        self.assertIn("local.use_cmek && var.manage_kms_iam", gov_main)
+        self.assertIn("var.manage_vpc_sc && !var.enforce_vpc_sc", gov_main)
+
+        # Decision 3: domain_billing_accounts and additional_dataform_repos.
+        self.assertIn('variable "domain_billing_accounts"', plat_vars)
+        self.assertIn("lookup(var.domain_billing_accounts, each.key, var.billing_account)", plat_main)
+        self.assertIn('variable "additional_dataform_repos"', gov_vars)
+        self.assertIn('module "additional_dataform_repository"', gov_main)
+        self.assertIn("${var.prefix}-${each.key}-medallion", gov_main)
+        self.assertIn('output "additional_dataform_repository_names"', gov_outs)
+
+        # Decision 4: cost floor defaults & official GCS dual-region location mapping.
+        org_example = (REPO_ROOT / "foundation/01-org-governance/terraform.tfvars.example").read_text(encoding="utf-8")
+        self.assertIn("enable_backup_dr                = false", org_example)
+        self.assertIn('variable "dual_region_location"', plat_vars)
+        for code in ('"AU"', '"CA"', '"IN"', '"IT"', '"DE"', '"EU"', '"US"', '"ASIA"'):
+            self.assertIn(code, plat_main)
+        self.assertIn("asia-southeast2", plat_main)
+        self.assertIn("asia-east2", plat_main)
+
+        # Residual CI & doc fixes.
+        deploy_wf = (REPO_ROOT / ".github/workflows/terraform-deploy.yml").read_text(encoding="utf-8")
+        self.assertIn("- shared", deploy_wf)
+        self.assertEqual(deploy_wf.count("google-github-actions/setup-gcloud@"), 4)
+        self.assertIn('BACKEND_PREFIX="foundation/01-org-governance/shared"', deploy_wf)
+        self.assertIn("IAC_OUTPUTS_BUCKET", deploy_wf)
+
+        guide = (REPO_ROOT / "docs/05-enterprise-operationalization-guide.md").read_text(encoding="utf-8")
+        skill = (REPO_ROOT / ".agents/skills/setup-customer-foundation/SKILL.md").read_text(encoding="utf-8")
+        decomm = (REPO_ROOT / "docs/04-multi-env-and-decommission.md").read_text(encoding="utf-8")
+        self.assertIn("foundation-outputs.json", guide)
+        self.assertIn("foundation-outputs.json", skill)
+        self.assertIn("shared-vpc associated-projects remove", decomm)
+        self.assertIn("shared-vpc disable", decomm)
+
+    def test_gcs_dual_region_location_inference_via_terraform_console(self) -> None:
+        import shutil
+        tf_bin = shutil.which("terraform")
+        if tf_bin is None:
+            self.skipTest("terraform binary not installed")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_repo = Path(tmp) / "repo"
+            shutil.copytree(REPO_ROOT / "modules", tmp_repo / "modules")
+            shutil.copytree(REPO_ROOT / "data", tmp_repo / "data")
+            plat_dir = tmp_repo / "data" / "enterprise" / "01-platform"
+            versions_path = plat_dir / "versions.tf"
+            versions_path.write_text(
+                versions_path.read_text(encoding="utf-8").replace('backend "gcs" {}', 'backend "local" {}'),
+                encoding="utf-8",
+            )
+            shutil.rmtree(plat_dir / ".terraform", ignore_errors=True)
+            cached_providers = REPO_ROOT / "data" / "enterprise" / "01-platform" / ".terraform" / "providers"
+            init_cmd = [tf_bin, f"-chdir={plat_dir}", "init", "-input=false"]
+            if cached_providers.is_dir():
+                init_cmd.append(f"-plugin-dir={cached_providers}")
+            init_res = subprocess.run(init_cmd, capture_output=True, text=True, check=False)
+            self.assertEqual(init_res.returncode, 0, init_res.stderr)
+
+            cases = (
+                ("australia-southeast1", ["australia-southeast1", "australia-southeast2"], "", "AU"),
+                ("northamerica-northeast1", ["northamerica-northeast1", "northamerica-northeast2"], "", "CA"),
+                ("asia-south1", ["asia-south1", "asia-south2"], "", "IN"),
+                ("europe-west8", ["europe-west8", "europe-west12"], "", "IT"),
+                ("europe-west3", ["europe-west3", "europe-west10"], "", "DE"),
+                ("asia-southeast1", ["asia-southeast1", "asia-east1"], "", "ASIA"),
+                ("us-central1", ["us-central1", "us-east1"], "NAM4", "NAM4"),
+            )
+            tfvars_path = plat_dir / "dual_region_test.auto.tfvars.json"
+            for region, dual_locs, explicit_loc, expected in cases:
+                with self.subTest(region=region, dual_locs=dual_locs, explicit_loc=explicit_loc):
+                    tfvars_path.write_text(
+                        json.dumps({
+                            "data_folder_id": "folders/123456",
+                            "billing_account": "000000-000000-000000",
+                            "region": region,
+                            "enable_dual_region_gcs": True,
+                            "dual_region_data_locations": dual_locs,
+                            "dual_region_location": explicit_loc,
+                        }),
+                        encoding="utf-8",
+                    )
+                    res = subprocess.run(
+                        [tf_bin, f"-chdir={plat_dir}", "console"],
+                        input="local.landing_bucket_location\n",
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(res.returncode, 0, res.stderr)
+                    self.assertEqual(res.stdout.strip().strip('"'), expected)
 
 
 if __name__ == "__main__":

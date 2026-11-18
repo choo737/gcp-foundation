@@ -299,7 +299,7 @@ data "google_bigquery_default_service_account" "etl" {
 }
 
 resource "google_kms_crypto_key_iam_member" "dataform_agent_cmek" {
-  count = local.use_cmek ? 1 : 0
+  count = local.use_cmek && var.manage_kms_iam ? 1 : 0
 
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
@@ -309,7 +309,7 @@ resource "google_kms_crypto_key_iam_member" "dataform_agent_cmek" {
 }
 
 resource "google_kms_crypto_key_iam_member" "dataplex_agent_cmek" {
-  count = local.use_cmek ? 1 : 0
+  count = local.use_cmek && var.manage_kms_iam ? 1 : 0
 
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
@@ -319,7 +319,7 @@ resource "google_kms_crypto_key_iam_member" "dataplex_agent_cmek" {
 }
 
 resource "google_kms_crypto_key_iam_member" "dataform_etl_cmek" {
-  count = local.use_cmek ? 1 : 0
+  count = local.use_cmek && var.manage_kms_iam ? 1 : 0
 
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
@@ -327,7 +327,7 @@ resource "google_kms_crypto_key_iam_member" "dataform_etl_cmek" {
 }
 
 resource "google_kms_crypto_key_iam_member" "bq_etl_ops_cmek" {
-  count = local.use_cmek ? 1 : 0
+  count = local.use_cmek && var.manage_kms_iam ? 1 : 0
 
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
@@ -385,6 +385,58 @@ module "dataform_repository" {
   labels                    = local.env_labels
 
   depends_on = [time_sleep.iam_and_kms_propagation]
+}
+
+resource "google_secret_manager_secret_iam_member" "additional_dataform_git_token" {
+  for_each = {
+    for k, v in var.additional_dataform_repos :
+    k => regex("^(projects/[^/]+/secrets/[^/]+)/versions/", v.git_token_secret_version)[0]
+    if trimspace(v.git_token_secret_version) != ""
+  }
+
+  secret_id = each.value
+  role      = "roles/secretmanager.secretAccessor"
+  member    = google_project_service_identity.dataform_agent.member
+
+  depends_on = [time_sleep.service_identity_propagation]
+}
+
+module "additional_dataform_repository" {
+  for_each = var.additional_dataform_repos
+  source   = "../../../modules/data/dataform-repository"
+
+  project_id                = var.etl_compute_project_id
+  region                    = var.region
+  prefix                    = var.prefix
+  environment               = var.environment
+  repository_name           = "${var.prefix}-${each.key}-medallion"
+  service_account_email     = google_service_account.dataform_etl.email
+  kms_key_name              = local.effective_kms_key_id
+  git_remote_url            = each.value.git_url
+  git_default_branch        = each.value.git_branch
+  git_release_commitish     = each.value.git_release_commitish
+  git_token_secret_version  = each.value.git_token_secret_version
+  default_database          = var.core_storage_project_id
+  bronze_project            = var.core_storage_project_id
+  bronze_dataset            = var.bronze_dataset_id
+  silver_project            = var.core_storage_project_id
+  silver_dataset            = var.silver_dataset_id
+  gold_project              = var.primary_gold_project_id
+  gold_dataset              = var.primary_gold_dataset_id
+  assertion_schema          = var.assertions_dataset_id
+  pii_policy_tag            = var.pii_masked_policy_tag_id
+  pii_masked_policy_tag     = var.pii_masked_policy_tag_id
+  pii_restricted_policy_tag = var.pii_restricted_policy_tag_id
+  enable_scheduled_workflow = var.enable_scheduled_workflow
+  workflow_cron_schedule    = each.value.cron_schedule
+  time_zone                 = each.value.time_zone
+  extra_compilation_vars    = local.extra_compilation_vars
+  labels                    = local.env_labels
+
+  depends_on = [
+    time_sleep.iam_and_kms_propagation,
+    google_secret_manager_secret_iam_member.additional_dataform_git_token,
+  ]
 }
 
 resource "google_bigquery_table" "pos_orders_cdc" {
@@ -921,7 +973,7 @@ module "additional_quality_scans" {
 }
 
 resource "google_access_context_manager_service_perimeter_dry_run_ingress_policy" "dataform_runtime" {
-  count = local.effective_vpc_sc_perimeter != "" && !var.enforce_vpc_sc ? 1 : 0
+  count = local.effective_vpc_sc_perimeter != "" && var.manage_vpc_sc && !var.enforce_vpc_sc ? 1 : 0
 
   perimeter = local.effective_vpc_sc_perimeter
   title     = "${var.prefix}-${var.environment}-dataform-ingress"
@@ -947,7 +999,7 @@ resource "google_access_context_manager_service_perimeter_dry_run_ingress_policy
 }
 
 resource "google_access_context_manager_service_perimeter_ingress_policy" "dataform_runtime" {
-  count = local.effective_vpc_sc_perimeter != "" && var.enforce_vpc_sc ? 1 : 0
+  count = local.effective_vpc_sc_perimeter != "" && var.manage_vpc_sc && var.enforce_vpc_sc ? 1 : 0
 
   perimeter = local.effective_vpc_sc_perimeter
   title     = "${var.prefix}-${var.environment}-dataform-ingress"

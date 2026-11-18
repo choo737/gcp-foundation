@@ -3,6 +3,11 @@ output "dataform_repository_name" {
   description = "Dataform repository short name in data-etl."
 }
 
+output "additional_dataform_repository_names" {
+  value       = { for k, m in module.additional_dataform_repository : k => m.repository_name }
+  description = "Map of additional Dataform repository short names keyed by business unit."
+}
+
 output "dataform_release_config_name" {
   value       = module.dataform_repository.release_config_name
   description = "Dataform release configuration name."

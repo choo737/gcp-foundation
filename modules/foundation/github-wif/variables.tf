@@ -61,16 +61,18 @@ variable "service_account_bindings" {
   type = map(object({
     service_account_id = string
     repositories       = list(string)
+    environments       = optional(list(string), [])
   }))
   default     = {}
-  description = "Optional map of service account resource names to allowed GitHub repositories for WIF impersonation."
+  description = "Optional map of service account resource names to allowed GitHub repositories and optional environments for WIF impersonation."
 
   validation {
     condition = alltrue(flatten([
-      for _, cfg in var.service_account_bindings : [
-        for r in cfg.repositories : can(regex("^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$", r))
-      ]
+      for _, cfg in var.service_account_bindings : concat(
+        [for r in cfg.repositories : can(regex("^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$", r))],
+        [for e in cfg.environments : can(regex("^[a-z0-9-]+$", e))],
+      )
     ]))
-    error_message = "Every repository in service_account_bindings must match owner/repo."
+    error_message = "Every repository in service_account_bindings must match owner/repo and every environment must match ^[a-z0-9-]+$."
   }
 }

@@ -64,7 +64,7 @@ resource "google_dataform_repository_release_config" "prod" {
   repository    = google_dataform_repository.this.name
   name          = local.effective_release_name
   git_commitish = var.git_release_commitish != "" ? var.git_release_commitish : var.git_default_branch
-  time_zone     = "Asia/Kuala_Lumpur"
+  time_zone     = var.time_zone
   cron_schedule = local.effective_release_cron
 
   code_compilation_config {
@@ -85,7 +85,7 @@ resource "google_dataform_repository_workflow_config" "scheduled" {
   name           = local.effective_workflow_name
   release_config = google_dataform_repository_release_config.prod[0].id
   cron_schedule  = var.workflow_cron_schedule
-  time_zone      = "Asia/Kuala_Lumpur"
+  time_zone      = var.time_zone
 
   invocation_config {
     service_account = local.effective_sa_email

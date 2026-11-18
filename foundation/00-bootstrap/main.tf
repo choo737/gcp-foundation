@@ -13,23 +13,71 @@ locals {
     "storage.googleapis.com",
   ])
 
-  ci_service_accounts = {
-    tf_foundation_ci = {
-      account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-tf-foundation-ci"), 0, 30), "-")
-      display_name = "${var.prefix} Foundation CI"
-      description  = "Service account for GitHub Actions gcp-foundation Terraform runs."
-    }
-    tf_ingestion_ci = {
-      account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-tf-ingestion-ci"), 0, 30), "-")
-      display_name = "${var.prefix} Ingestion CI"
-      description  = "Service account for GitHub Actions gcp-data-ingestion Terraform runs."
-    }
-    dataform_ci = {
-      account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-dataform-ci"), 0, 30), "-")
-      display_name = "${var.prefix} Dataform CI"
-      description  = "Service account for GitHub Actions Dataform compilation checks."
-    }
+  use_per_stage_sas = (
+    var.foundation_sa_mode == "per_stage" ||
+    contains(keys(var.ci_repository_map), "org_gov_ci") ||
+    contains(keys(var.ci_repository_map), "net_sec_ci") ||
+    contains(keys(var.ci_repository_map), "data_plat_ci")
+  )
+
+  include_tf_foundation_ci = (
+    var.foundation_sa_mode == "single" ||
+    contains(keys(var.ci_repository_map), "tf_foundation_ci")
+  )
+
+  ci_service_accounts = merge(
+    local.include_tf_foundation_ci ? {
+      tf_foundation_ci = {
+        account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-tf-foundation-ci"), 0, 30), "-")
+        display_name = "${var.prefix} Foundation CI"
+        description  = "Service account for GitHub Actions gcp-foundation Terraform runs."
+      }
+    } : {},
+    local.use_per_stage_sas ? {
+      org_gov_ci = {
+        account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-org-gov-ci"), 0, 30), "-")
+        display_name = "${var.prefix} Org Governance CI"
+        description  = "Service account for GitHub Actions foundation/01-org-governance runs."
+      }
+      net_sec_ci = {
+        account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-net-sec-ci"), 0, 30), "-")
+        display_name = "${var.prefix} Network Security CI"
+        description  = "Service account for GitHub Actions foundation/02-security-network runs."
+      }
+      data_plat_ci = {
+        account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-data-plat-ci"), 0, 30), "-")
+        display_name = "${var.prefix} Data Platform CI"
+        description  = "Service account for GitHub Actions data/enterprise runs."
+      }
+    } : {},
+    {
+      tf_ingestion_ci = {
+        account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-tf-ingestion-ci"), 0, 30), "-")
+        display_name = "${var.prefix} Ingestion CI"
+        description  = "Service account for GitHub Actions gcp-data-ingestion Terraform runs."
+      }
+      dataform_ci = {
+        account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-dataform-ci"), 0, 30), "-")
+        display_name = "${var.prefix} Dataform CI"
+        description  = "Service account for GitHub Actions Dataform compilation checks."
+      }
+    },
+  )
+
+  scoped_tfstate_prefixes = {
+    for k, prefix in {
+      org_gov_ci      = "foundation/01-org-governance/"
+      net_sec_ci      = "foundation/02-security-network/"
+      data_plat_ci    = "data/"
+      tf_ingestion_ci = "ingestion/"
+    } : k => prefix
+    if var.enable_ci_service_accounts && contains(keys(local.ci_service_accounts), k)
   }
+
+  iac_outputs_admin_sas = toset([
+    for k in ["tf_foundation_ci", "org_gov_ci", "net_sec_ci", "data_plat_ci"] : k
+    if var.enable_ci_service_accounts && contains(keys(local.ci_service_accounts), k)
+  ])
 
   default_ci_bindings = (
     var.enable_ci_service_accounts
@@ -131,6 +179,58 @@ resource "google_service_account" "ci" {
   description  = each.value.description
 
   depends_on = [time_sleep.api_propagation]
+}
+
+resource "google_storage_bucket_iam_member" "tfstate_foundation_admin" {
+  count = var.enable_ci_service_accounts && local.include_tf_foundation_ci ? 1 : 0
+
+  bucket = google_storage_bucket.tfstate.name
+  role   = "roles/storage.objectAdmin"
+  member = google_service_account.ci["tf_foundation_ci"].member
+}
+
+resource "google_storage_bucket_iam_member" "tfstate_scoped_admin" {
+  for_each = local.scoped_tfstate_prefixes
+
+  bucket = google_storage_bucket.tfstate.name
+  role   = "roles/storage.objectAdmin"
+  member = google_service_account.ci[each.key].member
+
+  condition {
+    title       = "${each.key}_tfstate_prefix"
+    description = "Restrict Terraform state access to ${each.value} prefix."
+    expression  = "resource.type != \"storage.googleapis.com/Object\" || resource.name.startsWith(\"projects/_/buckets/${google_storage_bucket.tfstate.name}/objects/${each.value}\")"
+  }
+}
+
+resource "google_storage_bucket_iam_member" "iac_outputs_foundation_admin" {
+  for_each = local.iac_outputs_admin_sas
+
+  bucket = google_storage_bucket.iac_outputs.name
+  role   = "roles/storage.objectAdmin"
+  member = google_service_account.ci[each.key].member
+}
+
+resource "google_storage_bucket_iam_member" "iac_outputs_ingestion_viewer" {
+  count = var.enable_ci_service_accounts ? 1 : 0
+
+  bucket = google_storage_bucket.iac_outputs.name
+  role   = "roles/storage.objectViewer"
+  member = google_service_account.ci["tf_ingestion_ci"].member
+}
+
+resource "google_storage_bucket_iam_member" "iac_outputs_ingestion_prefix_admin" {
+  count = var.enable_ci_service_accounts ? 1 : 0
+
+  bucket = google_storage_bucket.iac_outputs.name
+  role   = "roles/storage.objectAdmin"
+  member = google_service_account.ci["tf_ingestion_ci"].member
+
+  condition {
+    title       = "tf_ingestion_ci_outputs_prefix"
+    description = "Allow ingestion CI to export outputs under ingestion/ prefix."
+    expression  = "resource.type != \"storage.googleapis.com/Object\" || resource.name.startsWith(\"projects/_/buckets/${google_storage_bucket.iac_outputs.name}/objects/ingestion/\")"
+  }
 }
 
 module "github_wif" {

@@ -33,6 +33,21 @@ output "tf_foundation_ci_sa_email" {
   description = "Service account email for foundation Terraform CI runs."
 }
 
+output "org_gov_ci_sa_email" {
+  value       = try(google_service_account.ci["org_gov_ci"].email, "")
+  description = "Service account email for foundation/01-org-governance Terraform CI runs in per_stage mode."
+}
+
+output "net_sec_ci_sa_email" {
+  value       = try(google_service_account.ci["net_sec_ci"].email, "")
+  description = "Service account email for foundation/02-security-network Terraform CI runs in per_stage mode."
+}
+
+output "data_plat_ci_sa_email" {
+  value       = try(google_service_account.ci["data_plat_ci"].email, "")
+  description = "Service account email for data/enterprise Terraform CI runs in per_stage mode."
+}
+
 output "tf_ingestion_ci_sa_email" {
   value       = try(google_service_account.ci["tf_ingestion_ci"].email, "")
   description = "Service account email for ingestion Terraform CI runs."

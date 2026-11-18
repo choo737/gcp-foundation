@@ -125,8 +125,29 @@ locals {
     { for k, m in module.data_domain : "domain_${k}" => m.project_id },
   )
 
-  env_labels              = merge(var.labels, { environment = var.environment })
-  landing_bucket_location = var.enable_dual_region_gcs ? (startswith(var.region, "europe-") ? "EU" : upper(split("-", var.region)[0])) : var.region
+  env_labels           = merge(var.labels, { environment = var.environment })
+  trimmed_dual_loc     = var.dual_region_location != null ? trimspace(var.dual_region_location) : ""
+  clean_dual_locations = [for loc in var.dual_region_data_locations : lower(trimspace(loc)) if trimspace(loc) != ""]
+  inferred_dual_region_location = (
+    local.trimmed_dual_loc != "" ? upper(local.trimmed_dual_loc) : (
+      startswith(var.region, "australia-") ? "AU" : (
+        startswith(var.region, "northamerica-northeast") ? "CA" : (
+          startswith(var.region, "asia-south") && !startswith(var.region, "asia-southeast") ? "IN" : (
+            toset(local.clean_dual_locations) == toset(["europe-west8", "europe-west12"]) ? "IT" : (
+              toset(local.clean_dual_locations) == toset(["europe-west3", "europe-west10"]) ? "DE" : (
+                startswith(var.region, "europe-") ? "EU" : (
+                  startswith(var.region, "us-") ? "US" : (
+                    startswith(var.region, "asia-") ? "ASIA" : ""
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+  landing_bucket_location = var.enable_dual_region_gcs ? local.inferred_dual_region_location : var.region
 }
 
 resource "terraform_data" "validate_primary_domain" {
@@ -213,7 +234,7 @@ module "data_domain" {
   project_id      = "${local.project_prefix}-data-${each.key}"
   project_name    = trimsuffix(substr("${local.project_prefix} Data Mart ${each.key}", 0, 30), " ")
   folder_id       = local.effective_storage_folder_id
-  billing_account = var.billing_account
+  billing_account = lookup(var.domain_billing_accounts, each.key, var.billing_account)
   deletion_policy = var.project_deletion_policy
   tag_bindings    = local.project_tag_bindings
   labels          = local.env_labels
@@ -389,7 +410,7 @@ resource "time_sleep" "service_agent_propagation" {
 }
 
 resource "google_kms_crypto_key_iam_member" "storage_core_cmek" {
-  count = local.use_cmek ? 1 : 0
+  count = local.use_cmek && var.manage_kms_iam ? 1 : 0
 
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
@@ -399,7 +420,7 @@ resource "google_kms_crypto_key_iam_member" "storage_core_cmek" {
 }
 
 resource "google_kms_crypto_key_iam_member" "bq_core_cmek" {
-  count = local.use_cmek ? 1 : 0
+  count = local.use_cmek && var.manage_kms_iam ? 1 : 0
 
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
@@ -409,7 +430,7 @@ resource "google_kms_crypto_key_iam_member" "bq_core_cmek" {
 }
 
 resource "google_kms_crypto_key_iam_member" "bq_domain_cmek" {
-  for_each = local.use_cmek ? var.domain_marts : toset([])
+  for_each = local.use_cmek && var.manage_kms_iam ? var.domain_marts : toset([])
 
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
@@ -419,7 +440,7 @@ resource "google_kms_crypto_key_iam_member" "bq_domain_cmek" {
 }
 
 resource "google_kms_crypto_key_iam_member" "bq_etl_cmek" {
-  count = local.use_cmek ? 1 : 0
+  count = local.use_cmek && var.manage_kms_iam ? 1 : 0
 
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
@@ -429,7 +450,7 @@ resource "google_kms_crypto_key_iam_member" "bq_etl_cmek" {
 }
 
 resource "google_kms_crypto_key_iam_member" "bq_bi_cmek" {
-  count = local.use_cmek ? 1 : 0
+  count = local.use_cmek && var.manage_kms_iam ? 1 : 0
 
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
@@ -439,7 +460,7 @@ resource "google_kms_crypto_key_iam_member" "bq_bi_cmek" {
 }
 
 resource "google_kms_crypto_key_iam_member" "ar_etl_cmek" {
-  count = local.use_cmek ? 1 : 0
+  count = local.use_cmek && var.manage_kms_iam ? 1 : 0
 
   crypto_key_id = local.effective_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
@@ -449,7 +470,7 @@ resource "google_kms_crypto_key_iam_member" "ar_etl_cmek" {
 }
 
 resource "google_kms_crypto_key_iam_member" "bq_core_dr_cmek" {
-  count = local.create_dr_datasets && local.effective_dr_kms_key_id != "" ? 1 : 0
+  count = local.create_dr_datasets && local.effective_dr_kms_key_id != "" && var.manage_kms_iam ? 1 : 0
 
   crypto_key_id = local.effective_dr_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
@@ -459,7 +480,7 @@ resource "google_kms_crypto_key_iam_member" "bq_core_dr_cmek" {
 }
 
 resource "google_kms_crypto_key_iam_member" "bq_domain_dr_cmek" {
-  for_each = local.create_dr_datasets && local.effective_dr_kms_key_id != "" ? var.domain_marts : toset([])
+  for_each = local.create_dr_datasets && local.effective_dr_kms_key_id != "" && var.manage_kms_iam ? var.domain_marts : toset([])
 
   crypto_key_id = local.effective_dr_kms_key_id
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
@@ -573,6 +594,23 @@ resource "google_storage_bucket" "landing" {
     for_each = local.use_cmek ? [local.effective_kms_key_id] : []
     content {
       default_kms_key_name = encryption.value
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition = (
+        !var.enable_dual_region_gcs ||
+        contains(["ASIA", "AU", "CA", "DE", "EU", "IN", "IT", "US", "ASIA1", "EUR4", "EUR5", "EUR7", "EUR8", "NAM4"], local.landing_bucket_location)
+      )
+      error_message = "dual_region_location must be a valid GCS dual-region or multi-region code when enable_dual_region_gcs is true."
+    }
+    precondition {
+      condition = (
+        !var.enable_dual_region_gcs ||
+        !(local.landing_bucket_location == "ASIA" && (contains(local.clean_dual_locations, "asia-southeast2") || contains(local.clean_dual_locations, "asia-east2")))
+      )
+      error_message = "GCS excludes asia-southeast2 (Jakarta) and asia-east2 (Hong Kong) from ASIA configurable dual-regions; use [\"asia-southeast1\", \"asia-east1\"] or set enable_dual_region_gcs = false."
     }
   }
 
@@ -838,21 +876,21 @@ resource "google_project_iam_member" "break_glass_iam" {
 }
 
 resource "google_access_context_manager_service_perimeter_dry_run_resource" "data_projects" {
-  for_each = local.effective_vpc_sc_perimeter != "" && !var.enforce_vpc_sc ? local.vpc_sc_project_numbers : {}
+  for_each = local.effective_vpc_sc_perimeter != "" && var.manage_vpc_sc && !var.enforce_vpc_sc ? local.vpc_sc_project_numbers : {}
 
   perimeter_name = local.effective_vpc_sc_perimeter
   resource       = "projects/${each.value}"
 }
 
 resource "google_access_context_manager_service_perimeter_resource" "data_projects" {
-  for_each = local.effective_vpc_sc_perimeter != "" && var.enforce_vpc_sc ? local.vpc_sc_project_numbers : {}
+  for_each = local.effective_vpc_sc_perimeter != "" && var.manage_vpc_sc && var.enforce_vpc_sc ? local.vpc_sc_project_numbers : {}
 
   perimeter_name = local.effective_vpc_sc_perimeter
   resource       = "projects/${each.value}"
 }
 
 resource "google_access_context_manager_service_perimeter_dry_run_ingress_policy" "runtime_bi" {
-  count = local.effective_vpc_sc_perimeter != "" && !var.enforce_vpc_sc && length(local.vpc_sc_ingress_members) > 0 ? 1 : 0
+  count = local.effective_vpc_sc_perimeter != "" && var.manage_vpc_sc && !var.enforce_vpc_sc && length(local.vpc_sc_ingress_members) > 0 ? 1 : 0
 
   perimeter = local.effective_vpc_sc_perimeter
   title     = "${var.prefix}-${var.environment}-platform-ingress"
@@ -873,7 +911,7 @@ resource "google_access_context_manager_service_perimeter_dry_run_ingress_policy
 }
 
 resource "google_access_context_manager_service_perimeter_ingress_policy" "runtime_bi" {
-  count = local.effective_vpc_sc_perimeter != "" && var.enforce_vpc_sc && length(local.vpc_sc_ingress_members) > 0 ? 1 : 0
+  count = local.effective_vpc_sc_perimeter != "" && var.manage_vpc_sc && var.enforce_vpc_sc && length(local.vpc_sc_ingress_members) > 0 ? 1 : 0
 
   perimeter = local.effective_vpc_sc_perimeter
   title     = "${var.prefix}-${var.environment}-platform-ingress"
