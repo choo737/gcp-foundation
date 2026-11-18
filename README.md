@@ -6,15 +6,16 @@ Modular Google Cloud landing zone and Medallion data platform deployed with Terr
 
 <img src="assets/cloud-city-foundation.webp" alt="Layer 01 foundation overview" width="100%">
 
-`gcp-foundation` owns **Layer 01**: folders, IAM, 36 Org Policies, KMS keys, and Shared VPC networking.
+`gcp-foundation` owns **Layer 01**: folders, IAM, 38 Org Policies, KMS keys, and Shared VPC networking.
 It also sets up VPC Service Controls, Security Command Center, and locked audit log sinks.
 
 | Repository | Lifecycle | Responsibility | Status |
 | --- | --- | --- | --- |
 | [gcp-launchpad](https://github.com/choo737/gcp-launchpad) | Intake | Suite overview, architecture router, and `platform-context.json` handoff | Active |
-| **gcp-foundation** *(this repo)* | Day 0-2 | WIF bootstrap, folders, 36 Org Policies, KMS, VPC, SCC, BigQuery, Dataform | Active |
+| **gcp-foundation** *(this repo)* | Day 0-2 | WIF bootstrap, folders, 38 Org Policies, KMS, VPC, SCC, BigQuery, Dataform, XAI | Active |
 | [gcp-data-ingestion](https://github.com/choo737/gcp-data-ingestion) | Day 10+ | Pub/Sub streaming, Datastream CDC, Cloud Run batch ELT, and Cloud Workflows | Active |
 | [gcp-data-medallion](https://github.com/choo737/gcp-data-medallion) | Continuous | Dataform SQLX Bronze, Silver SCD2, Gold marts, and Dataplex quality specs | Active |
+| [gcp-data-science](https://github.com/choo737/gcp-data-science) | Day 15+ | Regulated ML pipelines, custom SHAP containers, model gates, and XAI drift ops | Active |
 | `gcp-webapp` | Planned | Regional or multi-region HA web app with Cloud Armor and Cloud SQL | Roadmap |
 | `gcp-adk-agent` | Planned | Production Google ADK agent on Agent Engine or Cloud Run with evaluation | Roadmap |
 
@@ -36,20 +37,21 @@ flowchart LR
     S1 --> S2["foundation/02-security-network"]
     S2 --> D1["data/enterprise/01-platform"]
     D1 --> D2["data/enterprise/02-governance-ops"]
+    D1 --> D3["data/enterprise/03-data-science"]
     SB["data/sandbox"]
 ```
 
 | Path | Target Scope | Stage Sequence |
 | --- | --- | --- |
 | Path 0: Bootstrap | Existing seed project | `foundation/00-bootstrap` |
-| Path 1: Greenfield | Org or top folder | `foundation/01-org-governance` -> `foundation/02-security-network` -> `data/enterprise/01-platform` -> `data/enterprise/02-governance-ops` |
-| Path 2: Brownfield | Existing `data-platform` folder | `data/enterprise/01-platform` -> `data/enterprise/02-governance-ops` |
+| Path 1: Greenfield | Org or top folder | `foundation/01-org-governance` -> `foundation/02-security-network` -> `data/enterprise/01-platform` -> `data/enterprise/02-governance-ops` -> `data/enterprise/03-data-science` |
+| Path 2: Brownfield | Existing `data-platform` folder | `data/enterprise/01-platform` -> `data/enterprise/02-governance-ops` -> `data/enterprise/03-data-science` |
 | Path 3: Sandbox | One existing GCP project | `data/sandbox` |
 
 - **Bootstrap & WIF**: Provisions hardened `tfstate` and `iac-outputs` buckets with soft delete plus keyless GitHub Actions WIF.
-- **Org Governance & SecOps**: Deploys `02-environments`, locked logs, Stage-01 CMEK, FinOps, Backup & DR, 36 Org Policies, and SCC.
+- **Org Governance & SecOps**: Deploys `02-environments`, locked logs, Stage-01 CMEK, FinOps, Backup & DR, 38 Org Policies, and SCC.
 - **Security & Network**: Configures HSM CMEK, Shared VPC, Cloud NGFW folder/VPC policies, `GCE_FIREWALL` secure tags, PSC, and VPC-SC.
-- **Enterprise Data Platform**: Separates governance, storage, and compute with BigQuery DR reservations and dual-region GCS options.
+- **Enterprise Data Platform**: Separates governance, storage, compute, and optional Data Science (`03-data-science`) with XAI audit ledgers.
 
 ## 6-Step Enterprise Operationalization
 
@@ -107,10 +109,10 @@ Create a private template repo first, link stages with scripts/link-stages.sh, a
 
 - `assets/`: Cloud City Layer 01 visual architecture animations.
 - `modules/foundation/`: Reusable five-file modules (`folder-hierarchy`, `project-factory`, `logging-guardrails`, `finops-governance`, `backup-dr`, `network-security`, `github-wif`, `monitoring-alerts`, `scc-secops`).
-- `modules/data/`: Reusable five-file modules (`governance-catalog`, `bigquery-dataset`, `bigquery-reservations`, `dataplex-scans`, `dataform-repository`).
+- `modules/data/`: Reusable five-file modules (`governance-catalog`, `bigquery-dataset`, `bigquery-reservations`, `dataplex-scans`, `dataform-repository`, `ml-governance`).
 - `foundation/`: Runnable stages `00-bootstrap`, `01-org-governance`, and `02-security-network` with `envs/` templates.
 - `data/sandbox/`: Single-project Medallion deployment root for rapid validation.
-- `data/enterprise/`: Two-stage enterprise data platform (`01-platform` and `02-governance-ops`) with `envs/` templates.
+- `data/enterprise/`: Three-stage enterprise data platform (`01-platform`, `02-governance-ops`, and optional `03-data-science`) with `envs/` templates.
 - `scripts/`: `link-stages.sh` for stage linking plus `configure-bq-dr-replica.sh` and `verify-scc-detectors.sh` for Day-2 ops.
 - `QUESTIONNAIRE.md`: Tier-2 intake form mapping compliance, SCC, VPC-SC, FinOps, and slot choices to `.tfvars`.
 - `CODEOWNERS`: Enforces `@choo737` review ownership across foundation, data, module, and workflow paths.

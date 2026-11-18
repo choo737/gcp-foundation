@@ -1,11 +1,12 @@
 # Enterprise Data Stages
 
-These two stages deploy an enterprise multi-project Medallion data platform inside an existing folder.
+These three stages deploy an enterprise multi-project Medallion data platform and optional Data Science XAI stage.
 
 ## Stage Order
 
 1. `01-platform/`: Creates `storage` and `compute` subfolders, five projects, datasets, KMS grants, and reservations.
 2. `02-governance-ops/`: Seeds Bronze tables, links Dataform in `data-etl`, grants IAM, and adds Dataplex scans.
+3. `03-data-science/`: Provisions optional `ds-exp` and `ml-ops` projects, Workbench instances, WORM bucket, and `ml_xai_audit_ledger`.
 
 ## Linking Upstream Stages
 

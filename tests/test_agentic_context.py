@@ -26,6 +26,7 @@ EXPECTED_ROOTS = (
     "data/sandbox",
     "data/enterprise/01-platform",
     "data/enterprise/02-governance-ops",
+    "data/enterprise/03-data-science",
 )
 
 
@@ -70,6 +71,8 @@ class AgenticContextAndToolingTest(unittest.TestCase):
             "-data-123456",
             "-data-etl",
             "-data-bi",
+            "-ds-exp",
+            "-ml-ops",
         )
         for suffix in suffixes:
             with self.subTest(suffix=suffix):
@@ -298,6 +301,8 @@ class AgenticContextAndToolingTest(unittest.TestCase):
             "bigquery.disableBQOmniAWS",
             "bigquery.disableBQOmniAzure",
             "ainotebooks.restrictPublicIp",
+            "ainotebooks.disableRootAccess",
+            "ainotebooks.disableFileDownloads",
             "compute.requireShieldedVm",
             "compute.skipDefaultNetworkCreation",
             "compute.requireOsLogin",
@@ -328,7 +333,7 @@ class AgenticContextAndToolingTest(unittest.TestCase):
         )
         self.assertEqual(
             len(boolean_constraints) + len(deny_all_constraints) + len(list_value_constraints),
-            36,
+            38,
         )
 
         mod_dir = REPO_ROOT / "modules" / "foundation" / "logging-guardrails"

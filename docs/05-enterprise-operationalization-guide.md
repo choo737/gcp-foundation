@@ -8,8 +8,11 @@ flowchart LR
     OG --> SN["02-security-network"]
     SN --> P1["01-platform"]
     P1 --> P2["02-governance-ops"]
+    P1 --> P3["03-data-science"]
     P2 --> GCS["link-stages.sh --export-gcs"]
+    P3 --> GCS
     GCS --> ING["gcp-data-ingestion"]
+    GCS --> DS["gcp-data-science"]
 ```
 
 ## Step 1 - Day 0: Private Repo, Branch Protection & Bootstrap (`00-bootstrap`)
@@ -30,7 +33,7 @@ terraform -chdir=foundation/00-bootstrap apply
 
 1. Complete [QUESTIONNAIRE.md](../QUESTIONNAIRE.md) or read gitignored `platform-context.json` from [gcp-launchpad](https://github.com/choo737/gcp-launchpad).
 2. Write answers into gitignored `foundation/01-org-governance/custom.auto.tfvars`.
-3. Enable `enable_org_policies = true` to enforce all 36 folder-level Org Policies.
+3. Enable `enable_org_policies = true` to enforce all 38 folder-level Org Policies.
 4. Set `retention_days = 2555`, `lock_audit_bucket = true`, `enable_audit_cmek = true`, and `enable_audit_project_lien = true` for FSI.
 5. Keep `create_dedicated_finops_project = true`, configure `finops_alert_email_addresses`, and link Cloud Billing export in `"US"`.
 6. Enable `enable_backup_dr = true` for immutable Backup Vaults and daily GCE and Cloud SQL schedules.
@@ -60,7 +63,7 @@ make apply STAGE="foundation/02-security-network" ENV="${ENV}" TFSTATE_BUCKET="$
 1. Link stage 01 and stage 02 outputs into `data/enterprise/01-platform` per environment.
 2. Provision five separated data projects, BigQuery `ENTERPRISE` slot reservations, and dual PII Policy Tags (`restricted` and `masked`).
 3. Link `01-platform` outputs into `data/enterprise/02-governance-ops` to deploy the Dataform repository, release configs, and Dataplex scans.
-4. Export non-sensitive outputs to the shared `iac-outputs` bucket for [gcp-data-ingestion](https://github.com/choo737/gcp-data-ingestion) without exposing `.tfstate`.
+4. Export non-sensitive outputs to the shared `iac-outputs` bucket for [gcp-data-ingestion](https://github.com/choo737/gcp-data-ingestion) and [gcp-data-science](https://github.com/choo737/gcp-data-science) without exposing `.tfstate`.
 
 ```bash
 ./scripts/link-stages.sh --env "${ENV}" \

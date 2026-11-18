@@ -148,12 +148,26 @@ All three pools (`etl`, `bi`, `adhoc`) use `reservation_edition` (`"ENTERPRISE"`
 | Essential Contacts | `foundation/01-org-governance` | `essential_contacts` | Security and legal contact emails and categories |
 | Data Platform Groups | `data/enterprise/01-platform` | `bi_analysts_group`, `data_engineers_group`, `governance_stewards_group`, `break_glass_admins_group` | Google Group emails for BI, ETL, governance, and break-glass |
 | PII Readers | `data/enterprise/01-platform`, `data/sandbox` | `masked_readers`, `fine_grained_readers`, `bi_analysts` | IAM members for masked vs unmasked BigQuery reads |
-| Multi-Repo CI WIF | `foundation/00-bootstrap` | `ci_repository_map` | Keys `tf_foundation_ci`, `tf_ingestion_ci`, `dataform_ci` mapped to `owner/repo` lists |
+| Multi-Repo CI WIF | `foundation/00-bootstrap` | `ci_repository_map` | Keys `tf_foundation_ci`, `tf_ingestion_ci`, `dataform_ci`, `tf_ds_ci` mapped to `owner/repo` lists |
 
 - Set `ci_repository_map` in `foundation/00-bootstrap` to prevent cross-repo service account impersonation.
 - Restrict WIF tokens further with `github_org`, `github_repositories`, `allowed_refs`, and `allowed_environments`.
 
-## 6. Write Customer Variables and Link Stages
+## 6. Data Science & Regulated XAI (`data/enterprise/03-data-science`)
+
+Configure optional experimentation and MLOps isolation, Workbench hardening, and XAI audit retention.
+
+| Variable | Default | Purpose | Notes |
+| --- | --- | --- | --- |
+| `enable_data_science` | `true` | Enables stage `03-data-science` provisioning | Set `false` to skip DS and XAI resources |
+| `team_size_tier` | `"M"` | Controls DS and MLOps project split | `"S"` reuses `data-etl`; `"M"` or `"L"` isolates `ds-exp` and `ml-ops` |
+| `ds_analysts_group` | `""` | Google Group granted experimentation access | Granted `aiplatform.viewer` in `ml-ops` and `pii_masked` reads only |
+| `enable_ds_workbench` | `true` | Provisions hardened Workbench instances | Private IP, CMEK disks, disabled root, downloads, terminal, `nbconvert` |
+| `enable_colab_enterprise` | `false` | Optional Colab Enterprise runtime template | Blocked automatically when `compliance_profile` is `regulated_fsi_rmit` |
+| `xai_audit_retention_days` | `2555` | WORM GCS retention days (`<ml_ops>-xai-worm`) | Locked automatically in `prod` environments |
+| `shap_additivity_tolerance` | `0.00001` | Tolerance for SHAP logit additivity Dataplex DQ | Enforced on `ml_xai_audit_ledger` |
+
+## 7. Write Customer Variables and Link Stages
 
 Write answers into gitignored `custom.auto.tfvars` or tracked `envs/<env>.tfvars` inside private customer repos. Keep `terraform.tfvars` and `*.auto.tfvars*` gitignored.
 
@@ -161,6 +175,7 @@ Write answers into gitignored `custom.auto.tfvars` or tracked `envs/<env>.tfvars
 ./scripts/link-stages.sh --env dev foundation/01-org-governance foundation/02-security-network
 ./scripts/link-stages.sh --env dev foundation/01-org-governance foundation/02-security-network data/enterprise/01-platform
 ./scripts/link-stages.sh --env dev data/enterprise/01-platform data/enterprise/02-governance-ops
+./scripts/link-stages.sh --env dev foundation/01-org-governance foundation/02-security-network data/enterprise/01-platform data/enterprise/03-data-science
 ```
 
 - Follow [docs/04-multi-env-and-decommission.md](docs/04-multi-env-and-decommission.md) before promoting to `prod` or tearing down protected stages.

@@ -27,6 +27,7 @@ Keep these per-environment defaults in `envs/<env>.tfvars`:
 - `dev`: `project_suffix = "dev01"`, `deletion_protection = false`, `enforce_vpc_sc = false`, `enable_scheduled_workflow = false`.
 - `staging`: `project_suffix = "stg01"`, `deletion_protection = false`, `enforce_vpc_sc = false`, `baseline_slots = 0`.
 - `prod`: `project_suffix = "prd01"`, `deletion_protection = true`, `enforce_vpc_sc = true`, `immutable_image_tags = true`.
+- `data/enterprise/03-data-science` (`prod`): `xai_audit_retention_days = 2555` locks the WORM bucket and protects `ml_xai_audit_ledger` from deletion.
 
 ## 2. VPC-SC Dry-Run to Enforced Cutover
 

@@ -102,8 +102,25 @@ locals {
     local.retail_alias_vars,
   )
 
+  trimmed_ml_ops_project = var.ml_ops_project_id != null ? trimspace(var.ml_ops_project_id) : ""
+  trimmed_ml_audit_ds    = var.ml_audit_dataset_id != null ? trimspace(var.ml_audit_dataset_id) : ""
+  effective_ml_audit_project = (
+    local.trimmed_ml_ops_project != ""
+    ? local.trimmed_ml_ops_project
+    : var.core_storage_project_id
+  )
+  effective_ml_audit_dataset = (
+    local.trimmed_ml_audit_ds != ""
+    ? local.trimmed_ml_audit_ds
+    : "${local.dataset_prefix}_ml_xai_audit"
+  )
+
   extra_compilation_vars = merge(
-    { allow_untagged_pii = "false" },
+    {
+      allow_untagged_pii = "false"
+      ml_audit_project   = local.effective_ml_audit_project
+      ml_audit_dataset   = local.effective_ml_audit_dataset
+    },
     local.domain_compilation_vars,
   )
 

@@ -24,6 +24,18 @@ variable "etl_compute_project_id" {
   description = "ETL compute project ID hosting Dataform from stage 01."
 }
 
+variable "ml_ops_project_id" {
+  type        = string
+  default     = ""
+  description = "Optional MLOps project ID from stage 03 hosting ml_xai_audit_ledger."
+}
+
+variable "ml_audit_dataset_id" {
+  type        = string
+  default     = ""
+  description = "Optional BigQuery dataset ID hosting ml_xai_audit_ledger."
+}
+
 variable "bronze_dataset_id" {
   type        = string
   description = "Core Bronze dataset ID."

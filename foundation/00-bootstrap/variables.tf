@@ -91,15 +91,15 @@ variable "allowed_environments" {
 variable "ci_repository_map" {
   type        = map(list(string))
   default     = {}
-  description = "Per-service-account GitHub repository allowlists (keys: tf_foundation_ci, org_gov_ci, net_sec_ci, data_plat_ci, tf_ingestion_ci, dataform_ci) preventing cross-repo impersonation."
+  description = "Per-service-account GitHub repository allowlists (keys: tf_foundation_ci, org_gov_ci, net_sec_ci, data_plat_ci, tf_ingestion_ci, dataform_ci, tf_ds_ci) preventing cross-repo impersonation."
 
   validation {
     condition = alltrue([
       for k, repos in var.ci_repository_map :
-      contains(["tf_foundation_ci", "org_gov_ci", "net_sec_ci", "data_plat_ci", "tf_ingestion_ci", "dataform_ci"], k) &&
+      contains(["tf_foundation_ci", "org_gov_ci", "net_sec_ci", "data_plat_ci", "tf_ingestion_ci", "dataform_ci", "tf_ds_ci"], k) &&
       alltrue([for r in repos : can(regex("^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$", r))])
     ])
-    error_message = "ci_repository_map keys must be tf_foundation_ci, org_gov_ci, net_sec_ci, data_plat_ci, tf_ingestion_ci, or dataform_ci, and values must match owner/repo."
+    error_message = "ci_repository_map keys must be tf_foundation_ci, org_gov_ci, net_sec_ci, data_plat_ci, tf_ingestion_ci, dataform_ci, or tf_ds_ci, and values must match owner/repo."
   }
 }
 

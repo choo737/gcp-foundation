@@ -4,7 +4,8 @@ ROOTS := \
 	foundation/02-security-network \
 	data/sandbox \
 	data/enterprise/01-platform \
-	data/enterprise/02-governance-ops
+	data/enterprise/02-governance-ops \
+	data/enterprise/03-data-science
 
 ENV ?= dev
 TFSTATE_BUCKET ?=
@@ -30,7 +31,7 @@ validate:
 
 init:
 	@case "$$STAGE" in \
-		foundation/00-bootstrap|foundation/01-org-governance|foundation/02-security-network|data/sandbox|data/enterprise/01-platform|data/enterprise/02-governance-ops) ;; \
+		foundation/00-bootstrap|foundation/01-org-governance|foundation/02-security-network|data/sandbox|data/enterprise/01-platform|data/enterprise/02-governance-ops|data/enterprise/03-data-science) ;; \
 		*) echo "Invalid STAGE: $$STAGE" >&2; exit 1 ;; \
 	esac; \
 	case "$$ENV" in \

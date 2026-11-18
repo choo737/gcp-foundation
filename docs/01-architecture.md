@@ -21,7 +21,9 @@ organizations/<org_id> (or folders/<parent_id>)
     │           │   └── <prefix>-<suffix>-data-<domain>
     │           └── compute
     │               ├── <prefix>-<suffix>-data-etl
-    │               └── <prefix>-<suffix>-data-bi
+    │               ├── <prefix>-<suffix>-data-bi
+    │               ├── <prefix>-<suffix>-ds-exp
+    │               └── <prefix>-<suffix>-ml-ops
     └── 02-workloads
         └── data-platform (brownfield fallback)
 ```
@@ -67,7 +69,7 @@ How `00_linked.auto.tfvars.json` and `gs://<prefix>-iac-outputs` solve this:
 - Enterprise GCS landing buckets support 14-day or 30-day soft delete plus optional dual-region `ASYNC_TURBO` replication.
 - See [Cloud Storage SLA](https://cloud.google.com/storage/sla) for regional, dual-region, and multi-region availability targets.
 - Foundation stage 01 encrypts SCC datasets and Pub/Sub topics with Stage-01 CMEK and supports `FOLDER` or `PROJECT` scope.
-- Foundation stage 01 enforces a 36-policy Org Policy baseline when `enable_org_policies = true`.
+- Foundation stage 01 enforces a 38-policy Org Policy baseline when `enable_org_policies = true`.
 - Foundation stage 02 configures CMEK, Shared VPC, Flow Logs, DNS logging, VPC-SC, and monitoring alerts.
 - Stage 02 layers folder hierarchical firewall policies, `GCE_FIREWALL` secure tags, threat intel rules, and NGFW Enterprise opt-in.
 - See [Cloud NGFW Overview](https://cloud.google.com/security/products/firewall) and [Cloud NGFW Pricing](https://cloud.google.com/firewall/pricing).

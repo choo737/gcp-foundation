@@ -28,6 +28,7 @@ MULTI_ENV_ROOTS = frozenset({
     "foundation/02-security-network",
     "data/enterprise/01-platform",
     "data/enterprise/02-governance-ops",
+    "data/enterprise/03-data-science",
 })
 
 EXPECTED_ENV_FILES = frozenset({
@@ -42,6 +43,7 @@ POST_BOOTSTRAP_ROOTS = frozenset({
     "data/sandbox",
     "data/enterprise/01-platform",
     "data/enterprise/02-governance-ops",
+    "data/enterprise/03-data-science",
 })
 
 EXPECTED_MODULES = frozenset({
@@ -59,6 +61,7 @@ EXPECTED_MODULES = frozenset({
     "modules/data/bigquery-reservations",
     "modules/data/dataplex-scans",
     "modules/data/dataform-repository",
+    "modules/data/ml-governance",
 })
 
 EXPECTED_ROOTS = frozenset({
@@ -68,6 +71,7 @@ EXPECTED_ROOTS = frozenset({
     "data/sandbox",
     "data/enterprise/01-platform",
     "data/enterprise/02-governance-ops",
+    "data/enterprise/03-data-science",
 })
 
 IGNORED_NAMES = frozenset({

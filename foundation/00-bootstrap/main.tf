@@ -25,6 +25,8 @@ locals {
     contains(keys(var.ci_repository_map), "tf_foundation_ci")
   )
 
+  include_tf_ds_ci = contains(keys(var.ci_repository_map), "tf_ds_ci")
+
   ci_service_accounts = merge(
     local.include_tf_foundation_ci ? {
       tf_foundation_ci = {
@@ -50,6 +52,13 @@ locals {
         description  = "Service account for GitHub Actions data/enterprise runs."
       }
     } : {},
+    local.include_tf_ds_ci ? {
+      tf_ds_ci = {
+        account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-tf-ds-ci"), 0, 30), "-")
+        display_name = "${var.prefix} Data Science CI"
+        description  = "Service account for GitHub Actions gcp-data-science and 03-data-science Terraform runs."
+      }
+    } : {},
     {
       tf_ingestion_ci = {
         account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-tf-ingestion-ci"), 0, 30), "-")
@@ -70,6 +79,7 @@ locals {
       net_sec_ci      = "foundation/02-security-network/"
       data_plat_ci    = "data/"
       tf_ingestion_ci = "ingestion/"
+      tf_ds_ci        = "data-science/"
     } : k => prefix
     if var.enable_ci_service_accounts && contains(keys(local.ci_service_accounts), k)
   }
@@ -230,6 +240,28 @@ resource "google_storage_bucket_iam_member" "iac_outputs_ingestion_prefix_admin"
     title       = "tf_ingestion_ci_outputs_prefix"
     description = "Allow ingestion CI to export outputs under ingestion/ prefix."
     expression  = "(resource.type == \"storage.googleapis.com/Bucket\" && (api.getAttribute(\"storage.googleapis.com/objectListPrefix\", \"\").startsWith(\"ingestion/\") || api.getAttribute(\"storage.googleapis.com/objectListPrefix\", \"\") == \"ingestion\")) || (resource.type == \"storage.googleapis.com/Object\" && resource.name.startsWith(\"projects/_/buckets/${google_storage_bucket.iac_outputs.name}/objects/ingestion/\"))"
+  }
+}
+
+resource "google_storage_bucket_iam_member" "iac_outputs_ds_viewer" {
+  count = var.enable_ci_service_accounts && local.include_tf_ds_ci ? 1 : 0
+
+  bucket = google_storage_bucket.iac_outputs.name
+  role   = "roles/storage.objectViewer"
+  member = google_service_account.ci["tf_ds_ci"].member
+}
+
+resource "google_storage_bucket_iam_member" "iac_outputs_ds_prefix_admin" {
+  count = var.enable_ci_service_accounts && local.include_tf_ds_ci ? 1 : 0
+
+  bucket = google_storage_bucket.iac_outputs.name
+  role   = "roles/storage.objectAdmin"
+  member = google_service_account.ci["tf_ds_ci"].member
+
+  condition {
+    title       = "tf_ds_ci_outputs_prefix"
+    description = "Allow data science CI to export outputs under data-science/ prefix."
+    expression  = "(resource.type == \"storage.googleapis.com/Bucket\" && (api.getAttribute(\"storage.googleapis.com/objectListPrefix\", \"\").startsWith(\"data-science/\") || api.getAttribute(\"storage.googleapis.com/objectListPrefix\", \"\") == \"data-science\")) || (resource.type == \"storage.googleapis.com/Object\" && resource.name.startsWith(\"projects/_/buckets/${google_storage_bucket.iac_outputs.name}/objects/data-science/\"))"
   }
 }
 

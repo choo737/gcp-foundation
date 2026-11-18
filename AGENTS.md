@@ -5,10 +5,10 @@ This repository holds Terraform modules and runnable stages for Google Cloud fou
 ## Repository Layout
 
 - `modules/foundation/`: Reusable modules (`folder-hierarchy`, `project-factory`, `logging-guardrails`, `finops-governance`, `network-security`, `github-wif`, `monitoring-alerts`).
-- `modules/data/`: Reusable modules (`governance-catalog`, `bigquery-dataset`, `bigquery-reservations`, `dataplex-scans`, `dataform-repository`).
+- `modules/data/`: Reusable modules (`governance-catalog`, `bigquery-dataset`, `bigquery-reservations`, `dataplex-scans`, `dataform-repository`, `ml-governance`).
 - `foundation/`: Stages `00-bootstrap`, `01-org-governance`, and `02-security-network`.
 - `data/sandbox/`: Single-project Medallion deployment root.
-- `data/enterprise/`: Multi-project stages `01-platform` and `02-governance-ops`.
+- `data/enterprise/`: Multi-project stages `01-platform`, `02-governance-ops`, and optional `03-data-science`.
 - `scripts/link-stages.sh`: Links Terraform outputs locally or via GCS into `00_linked.auto.tfvars.json`.
 - `CODEOWNERS`: Enforces `@choo737` pull request review ownership across foundation, data, module, and workflow directories.
 - `docs/05-enterprise-operationalization-guide.md`: Step-by-step Day-0 through Day-2 operationalization guide.
@@ -30,7 +30,7 @@ When routed from `https://github.com/choo737/gcp-launchpad`, check for optional 
 
 1. Every directory under `modules/*/*` must contain only `README.md`, `main.tf`, `variables.tf`, `outputs.tf`, and `versions.tf`.
 2. Runnable stages under `foundation/`, `data/sandbox/`, and `data/enterprise/` contain those five files, `.terraform.lock.hcl`, and `terraform.tfvars.example`.
-3. Environment-scoped stages (`foundation/02-security-network`, `data/enterprise/01-platform`, `data/enterprise/02-governance-ops`) also contain `envs/{dev,staging,prod}.tfvars.example`.
+3. Environment-scoped stages (`foundation/02-security-network`, `data/enterprise/01-platform`, `data/enterprise/02-governance-ops`, `data/enterprise/03-data-science`) also contain `envs/{dev,staging,prod}.tfvars.example`.
 4. Every `versions.tf` must pin `required_version = ">= 1.8.0"` and `hashicorp/google` `version = ">= 8.0.0, < 9.0.0"`.
 5. Never commit real GCP project IDs, organization IDs, folder IDs, billing IDs, secrets, or personal handles.
 6. Never commit `terraform.tfvars`, `custom.auto.tfvars`, `platform-context.json`, `*.tfstate*`, `.terraform/`, or `00_linked.auto.tfvars.json`.

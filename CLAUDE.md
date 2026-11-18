@@ -9,7 +9,7 @@ Read [AGENTS.md](AGENTS.md), [QUESTIONNAIRE.md](QUESTIONNAIRE.md), [CODEOWNERS](
 - Walk through `QUESTIONNAIRE.md` for adoption path, compliance profile, GCP IDs, `project_suffix`, and environment (`dev`, `staging`, `prod`).
 - Write customer variables to gitignored `custom.auto.tfvars` or `envs/<env>.tfvars`, never to tracked files.
 - Obey 5-file symmetry in `modules/foundation/` and `modules/data/`.
-- Obey root file symmetry, committed `.terraform.lock.hcl`, and `envs/{dev,staging,prod}.tfvars.example` in `foundation/`, `data/sandbox/`, and `data/enterprise/`.
+- Obey root file symmetry, committed `.terraform.lock.hcl`, and `envs/{dev,staging,prod}.tfvars.example` in `foundation/`, `data/sandbox/`, and `data/enterprise/` (including `03-data-science`).
 - Pass outputs between stages using `scripts/link-stages.sh` (`00_linked.auto.tfvars.json`) locally or via GCS without sharing remote state.
 - Keep `hashicorp/google` pinned to `>= 8.0.0, < 9.0.0` and Terraform to `>= 1.8.0`.
 - Always run `make fmt-check`, `make validate`, and `make test` after changes.

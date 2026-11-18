@@ -27,6 +27,7 @@ locals {
   create_ngfw_ent       = var.enable_vpc && var.enable_ngfw_enterprise && local.numeric_org_id != ""
 
   vpc_sc_restricted_services = [
+    "aiplatform.googleapis.com",
     "artifactregistry.googleapis.com",
     "bigquery.googleapis.com",
     "bigquerydatapolicy.googleapis.com",
@@ -35,11 +36,13 @@ locals {
     "cloudscheduler.googleapis.com",
     "datacatalog.googleapis.com",
     "dataform.googleapis.com",
+    "datalineage.googleapis.com",
     "dataplex.googleapis.com",
     "datastream.googleapis.com",
     "eventarc.googleapis.com",
     "logging.googleapis.com",
     "monitoring.googleapis.com",
+    "notebooks.googleapis.com",
     "pubsub.googleapis.com",
     "run.googleapis.com",
     "secretmanager.googleapis.com",
@@ -55,6 +58,18 @@ locals {
     gcr_io = {
       zone_name = "${var.prefix}-gcr-io-zone"
       dns_name  = "gcr.io."
+    }
+    notebooks_googleapis = {
+      zone_name = "${var.prefix}-notebooks-googleapis-zone"
+      dns_name  = "notebooks.googleapis.com."
+    }
+    notebooks_cloud = {
+      zone_name = "${var.prefix}-notebooks-cloud-zone"
+      dns_name  = "notebooks.cloud.google.com."
+    }
+    kernels_googleusercontent = {
+      zone_name = "${var.prefix}-kernels-zone"
+      dns_name  = "kernels.googleusercontent.com."
     }
   } : {}
 }

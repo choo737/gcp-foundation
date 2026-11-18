@@ -122,6 +122,8 @@ variable "data_access_audit_services" {
     "storage.googleapis.com",
     "secretmanager.googleapis.com",
     "datacatalog.googleapis.com",
+    "aiplatform.googleapis.com",
+    "notebooks.googleapis.com",
   ]
   description = "APIs with ADMIN_READ, DATA_READ, and DATA_WRITE folder audit logging enabled."
 }
@@ -150,6 +152,8 @@ variable "boolean_org_policies" {
     "bigquery.disableBQOmniAWS",
     "bigquery.disableBQOmniAzure",
     "ainotebooks.restrictPublicIp",
+    "ainotebooks.disableRootAccess",
+    "ainotebooks.disableFileDownloads",
     # Compute & Network Hardening
     "compute.requireShieldedVm",
     "compute.skipDefaultNetworkCreation",

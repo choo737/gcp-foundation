@@ -58,6 +58,11 @@ output "dataform_ci_sa_email" {
   description = "Service account email for Dataform CI checks."
 }
 
+output "tf_ds_ci_sa_email" {
+  value       = try(google_service_account.ci["tf_ds_ci"].email, "")
+  description = "Service account email for Data Science Terraform CI runs."
+}
+
 output "region" {
   value       = var.region
   description = "Default GCP region propagated to downstream stages."
