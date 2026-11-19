@@ -20,6 +20,6 @@ module "github_wif" {
   github_org           = "acme-corp"
   github_repositories  = ["acme-corp/gcp-foundation"]
   allowed_refs         = ["refs/heads/main", "refs/tags/*"]
-  allowed_environments = ["dev", "staging", "prod"]
+  allowed_environments = ["shared", "dev", "staging", "prod"]
 }
 ```

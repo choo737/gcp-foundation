@@ -56,7 +56,7 @@ locals {
       tf_ds_ci = {
         account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-tf-ds-ci"), 0, 30), "-")
         display_name = "${var.prefix} Data Science CI"
-        description  = "Service account for GitHub Actions gcp-data-science and 03-data-science Terraform runs."
+        description  = "Service account for GitHub Actions gcp-data-science Terraform runs."
       }
     } : {},
     {

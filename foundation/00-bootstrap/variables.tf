@@ -85,7 +85,7 @@ variable "allowed_refs" {
 variable "allowed_environments" {
   type        = list(string)
   default     = []
-  description = "Optional GitHub Environments (dev, staging, prod) enforced in WIF CEL."
+  description = "Optional GitHub Environments (shared, dev, staging, prod) enforced in WIF CEL."
 }
 
 variable "ci_repository_map" {
