@@ -23,6 +23,16 @@ output "ml_audit_table_id" {
   description = "BigQuery table ID of the 18-column XAI audit ledger."
 }
 
+output "ml_training_labels_table_id" {
+  value       = try(module.ml_governance[0].ml_training_labels_table_id, "")
+  description = "BigQuery table ID of the governed point-in-time training labels table."
+}
+
+output "vertex_psc_service_connection_policy_id" {
+  value       = try(module.ml_governance[0].vertex_psc_service_connection_policy_id, "")
+  description = "Network Connectivity Service Connection Policy resource ID for Vertex AI PSC automation."
+}
+
 output "ml_worm_bucket_name" {
   value       = try(module.ml_governance[0].ml_worm_bucket_name, "")
   description = "Locked WORM GCS bucket name for XAI audit archives."

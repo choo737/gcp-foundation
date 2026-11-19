@@ -299,14 +299,30 @@ def resolve_env_gcs_uri(uri: str, env: str) -> str:
     return f"gs://{bucket}/{env}/{filename}"
 
 
+def find_repo_root(stage_abs: Path) -> Path | None:
+    for candidate in (stage_abs, *stage_abs.parents):
+        if candidate == candidate.parent:
+            break
+        if (candidate / ".git").exists():
+            return candidate
+    for candidate in stage_abs.parents:
+        if candidate == candidate.parent:
+            break
+        if candidate.name in ("stages", "foundation", "data"):
+            return candidate.parent
+    return None
+
+
 def resolve_backend_prefix(raw_src: str, src_abs: Path, env: str) -> str:
+    resolved_src = src_abs.resolve()
     try:
-        rel_stage = src_abs.resolve().relative_to(repo_root).as_posix()
+        rel_stage = resolved_src.relative_to(repo_root).as_posix()
     except ValueError:
-        cleaned = raw_src.rstrip("/")
-        if cleaned.startswith("./"):
-            cleaned = cleaned[2:]
-        rel_stage = src_abs.name if Path(raw_src).is_absolute() else cleaned
+        ext_root = find_repo_root(resolved_src)
+        if ext_root is not None:
+            rel_stage = resolved_src.relative_to(ext_root).as_posix()
+        else:
+            rel_stage = resolved_src.name
     return f"{rel_stage}/{env}"
 
 
@@ -464,14 +480,30 @@ def resolve_env_gcs_uri(uri: str, env: str) -> str:
     return f"gs://{bucket}/{env}/{filename}"
 
 
+def find_repo_root(stage_abs: Path) -> Path | None:
+    for candidate in (stage_abs, *stage_abs.parents):
+        if candidate == candidate.parent:
+            break
+        if (candidate / ".git").exists():
+            return candidate
+    for candidate in stage_abs.parents:
+        if candidate == candidate.parent:
+            break
+        if candidate.name in ("stages", "foundation", "data"):
+            return candidate.parent
+    return None
+
+
 def resolve_backend_prefix(raw_src: str, src_abs: Path, env: str) -> str:
+    resolved_src = src_abs.resolve()
     try:
-        rel_stage = src_abs.resolve().relative_to(repo_root).as_posix()
+        rel_stage = resolved_src.relative_to(repo_root).as_posix()
     except ValueError:
-        cleaned = raw_src.rstrip("/")
-        if cleaned.startswith("./"):
-            cleaned = cleaned[2:]
-        rel_stage = src_abs.name if Path(raw_src).is_absolute() else cleaned
+        ext_root = find_repo_root(resolved_src)
+        if ext_root is not None:
+            rel_stage = resolved_src.relative_to(ext_root).as_posix()
+        else:
+            rel_stage = resolved_src.name
     return f"{rel_stage}/{env}"
 
 

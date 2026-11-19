@@ -38,6 +38,16 @@ output "ml_audit_table_id" {
   description = "BigQuery table ID of the 18-column XAI audit ledger."
 }
 
+output "ml_training_labels_table_id" {
+  value       = google_bigquery_table.ml_training_labels.table_id
+  description = "BigQuery table ID of the governed point-in-time training labels table."
+}
+
+output "vertex_psc_service_connection_policy_id" {
+  value       = try(google_network_connectivity_service_connection_policy.vertex_psc[0].id, "")
+  description = "Network Connectivity Service Connection Policy resource ID for Vertex AI PSC automation."
+}
+
 output "xai_quality_scan_id" {
   value       = try(google_dataplex_datascan.xai_audit[0].id, "")
   description = "Dataplex AutoDQ scan resource ID on ml_xai_audit_ledger."

@@ -509,8 +509,10 @@ module "ml_governance" {
   environment                    = var.environment
   compliance_profile             = var.compliance_profile
   kms_key_id                     = local.effective_kms_key_id
+  manage_kms_iam                 = var.manage_kms_iam
   vpc_id                         = local.effective_vpc_id
   subnet_id                      = local.effective_subnet_id
+  enable_vertex_psc_policy       = var.enable_vertex_psc_policy
   enable_ds_workbench            = var.enable_ds_workbench
   workbench_runtime_sa_email     = google_service_account.workbench_runtime[0].email
   workbench_idle_timeout_seconds = var.workbench_idle_timeout_seconds

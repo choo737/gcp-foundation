@@ -104,8 +104,8 @@ class MlGovernanceAndXaiTest(unittest.TestCase):
         self.assertIn('table_id                 = "ml_xai_audit_ledger"', ml_main)
         self.assertIn("require_partition_filter = true", ml_main)
         self.assertIn('field = "decision_timestamp"', ml_main)
-        self.assertIn('clustering               = ["model_id", "explained_class"]', ml_main)
-        self.assertIn("deletion_protection      = var.environment == \"prod\"", ml_main)
+        self.assertIn('clustering               = ["serving_track", "model_id", "explained_class", "entity_id"]', ml_main)
+        self.assertIn('deletion_protection      = var.environment != "dev"', ml_main)
 
         schema_match = re.search(r"schema\s*=\s*jsonencode\((\[[\s\S]*?\])\)", ml_main)
         self.assertIsNotNone(schema_match)
@@ -114,6 +114,40 @@ class MlGovernanceAndXaiTest(unittest.TestCase):
             schema_match.group(1),
         )
         self.assertEqual(parsed_cols, XAI_LEDGER_COLUMNS)
+
+        self.assertIn('resource "google_bigquery_table" "ml_training_labels"', ml_main)
+        self.assertIn('table_id                 = "ml_training_labels"', ml_main)
+        self.assertIn('field = "label_timestamp"', ml_main)
+        self.assertIn('clustering               = ["entity_id", "approved_flag"]', ml_main)
+        labels_block = ml_main.split('resource "google_bigquery_table" "ml_training_labels"', 1)[1]
+        labels_schema_match = re.search(r"schema\s*=\s*jsonencode\((\[[\s\S]*?\])\)", labels_block)
+        self.assertIsNotNone(labels_schema_match)
+        labels_cols = re.findall(
+            r'name\s*=\s*"([^"]+)"\s+type\s*=\s*"([^"]+)"\s+mode\s*=\s*"([^"]+)"',
+            labels_schema_match.group(1),
+        )
+        self.assertEqual(
+            labels_cols,
+            [
+                ("application_id", "STRING", "REQUIRED"),
+                ("entity_id", "STRING", "REQUIRED"),
+                ("label_timestamp", "TIMESTAMP", "REQUIRED"),
+                ("approved_flag", "INT64", "REQUIRED"),
+                ("demographic_group", "STRING", "NULLABLE"),
+            ],
+        )
+
+        for api_svc in ("pubsub.googleapis.com", "workflows.googleapis.com", "run.googleapis.com"):
+            self.assertIn(f'"{api_svc}"', ml_main)
+        self.assertIn('resource "google_project_service_identity" "ml_ops_runtime"', ml_main)
+        self.assertIn('resource "google_kms_crypto_key_iam_member" "ml_ops_runtime_cmek"', ml_main)
+        self.assertIn('resource "google_network_connectivity_service_connection_policy" "vertex_psc"', ml_main)
+        self.assertIn('service_class = "gcp-vertexai"', ml_main)
+        self.assertIn('service                    = "networkconnectivity.googleapis.com"', ml_main)
+        self.assertIn('variable "enable_vertex_psc_policy"', ml_vars)
+        ml_outs = (mod_dir / "outputs.tf").read_text(encoding="utf-8")
+        self.assertIn('output "ml_training_labels_table_id"', ml_outs)
+        self.assertIn('output "vertex_psc_service_connection_policy_id"', ml_outs)
 
         self.assertIn('resource "google_dataplex_datascan" "xai_audit"', ml_main)
         self.assertIn("row_condition_expectation", ml_main)
@@ -153,6 +187,8 @@ class MlGovernanceAndXaiTest(unittest.TestCase):
             "ml_artifact_repo_id",
             "ml_audit_dataset_id",
             "ml_audit_table_id",
+            "ml_training_labels_table_id",
+            "vertex_psc_service_connection_policy_id",
             "ml_worm_bucket_name",
             "shap_additivity_tolerance",
             "core_storage_project_id",
@@ -173,6 +209,9 @@ class MlGovernanceAndXaiTest(unittest.TestCase):
         self.assertIn('variable "ml_audit_dataset_id"', gov_vars)
         self.assertIn("ml_audit_project   = local.effective_ml_audit_project", gov_main)
         self.assertIn("ml_audit_dataset   = local.effective_ml_audit_dataset", gov_main)
+        self.assertIn('resource "google_bigquery_dataset_iam_member" "dataform_etl_ml_audit_viewer"', gov_main)
+        self.assertIn('data "google_project" "ml_ops"', gov_main)
+        self.assertIn('resource "terraform_data" "validate_ml_audit_inputs"', gov_main)
 
     def test_stage_03_tier_resolution_and_colab_fsi_block_with_terraform(self) -> None:
         tf_bin = shutil.which("terraform")

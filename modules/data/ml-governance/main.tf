@@ -4,6 +4,7 @@ locals {
   effective_vpc_id      = var.vpc_id != null ? trimspace(var.vpc_id) : ""
   effective_subnet_id   = var.subnet_id != null ? trimspace(var.subnet_id) : ""
   use_private_network   = local.effective_vpc_id != "" && local.effective_subnet_id != ""
+  network_project_id    = try(regex("^projects/([^/]+)/global/networks/", local.effective_vpc_id)[0], "")
   trimmed_wb_sa         = var.workbench_runtime_sa_email != null ? trimspace(var.workbench_runtime_sa_email) : ""
   trimmed_xai_cron      = var.xai_quality_schedule_cron != null ? trimspace(var.xai_quality_schedule_cron) : ""
   dataset_prefix        = replace(var.prefix, "-", "_")
@@ -223,9 +224,9 @@ resource "google_bigquery_table" "ml_xai_audit_ledger" {
   dataset_id               = google_bigquery_dataset.ml_xai_audit.dataset_id
   table_id                 = "ml_xai_audit_ledger"
   description              = "Regulated XAI decision audit ledger capturing model digests, logits, SHAP attributions, and adverse reasons."
-  deletion_protection      = var.environment == "prod"
+  deletion_protection      = var.environment != "dev"
   require_partition_filter = true
-  clustering               = ["model_id", "explained_class"]
+  clustering               = ["serving_track", "model_id", "explained_class", "entity_id"]
   labels                   = var.labels
 
   time_partitioning {
@@ -350,6 +351,118 @@ resource "google_bigquery_table" "ml_xai_audit_ledger" {
       kms_key_name = encryption_configuration.value
     }
   }
+}
+
+resource "google_bigquery_table" "ml_training_labels" {
+  project                  = var.ml_ops_project_id
+  dataset_id               = google_bigquery_dataset.ml_xai_audit.dataset_id
+  table_id                 = "ml_training_labels"
+  description              = "Governed point-in-time supervised training labels for ML.ENTITY_FEATURES_AT_TIME and MRM fairness validation."
+  deletion_protection      = var.environment != "dev"
+  require_partition_filter = true
+  clustering               = ["entity_id", "approved_flag"]
+  labels                   = var.labels
+
+  time_partitioning {
+    type  = "DAY"
+    field = "label_timestamp"
+  }
+
+  schema = jsonencode([
+    {
+      name        = "application_id"
+      type        = "STRING"
+      mode        = "REQUIRED"
+      description = "Unique underwriting or account evaluation identifier."
+    },
+    {
+      name        = "entity_id"
+      type        = "STRING"
+      mode        = "REQUIRED"
+      description = "Entity or customer identifier matching Silver ml_customer_features.entity_id."
+    },
+    {
+      name        = "label_timestamp"
+      type        = "TIMESTAMP"
+      mode        = "REQUIRED"
+      description = "Point-in-time outcome cutoff timestamp for ML.ENTITY_FEATURES_AT_TIME."
+    },
+    {
+      name        = "approved_flag"
+      type        = "INT64"
+      mode        = "REQUIRED"
+      description = "Supervised binary outcome label (1 = approved/performing, 0 = rejected/adverse)."
+    },
+    {
+      name        = "demographic_group"
+      type        = "STRING"
+      mode        = "NULLABLE"
+      description = "Optional protected cohort slice for MRM 80% disparate-impact fairness validation."
+    }
+  ])
+
+  dynamic "encryption_configuration" {
+    for_each = local.use_cmek ? [local.effective_kms_key_id] : []
+    content {
+      kms_key_name = encryption_configuration.value
+    }
+  }
+}
+
+resource "google_project_service" "ml_ops_runtime_apis" {
+  for_each = toset([
+    "pubsub.googleapis.com",
+    "workflows.googleapis.com",
+    "run.googleapis.com",
+  ])
+
+  project                    = var.ml_ops_project_id
+  service                    = each.value
+  disable_on_destroy         = false
+  disable_dependent_services = false
+}
+
+resource "google_project_service_identity" "ml_ops_runtime" {
+  for_each = google_project_service.ml_ops_runtime_apis
+  provider = google-beta
+
+  project = var.ml_ops_project_id
+  service = each.value.service
+}
+
+resource "google_kms_crypto_key_iam_member" "ml_ops_runtime_cmek" {
+  for_each = local.use_cmek && var.manage_kms_iam ? google_project_service_identity.ml_ops_runtime : {}
+
+  crypto_key_id = local.effective_kms_key_id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  member        = each.value.member
+}
+
+resource "google_project_service" "networkconnectivity_vpc_host" {
+  count = var.enable_vertex_psc_policy && local.use_private_network && local.network_project_id != "" ? 1 : 0
+
+  project                    = local.network_project_id
+  service                    = "networkconnectivity.googleapis.com"
+  disable_on_destroy         = false
+  disable_dependent_services = false
+}
+
+resource "google_network_connectivity_service_connection_policy" "vertex_psc" {
+  count = var.enable_vertex_psc_policy && local.use_private_network && local.network_project_id != "" ? 1 : 0
+
+  project       = local.network_project_id
+  location      = var.region
+  name          = "${replace(lower(var.prefix), "_", "-")}-${var.environment}-vertex-psc"
+  description   = "Automated PSC service connection policy for Vertex AI endpoints and Feature Online Store."
+  service_class = "gcp-vertexai"
+  network       = local.effective_vpc_id
+  labels        = var.labels
+
+  psc_config {
+    subnetworks = [local.effective_subnet_id]
+  }
+
+  depends_on = [google_project_service.networkconnectivity_vpc_host]
 }
 
 resource "google_dataplex_datascan" "xai_audit" {

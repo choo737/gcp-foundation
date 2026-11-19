@@ -155,6 +155,12 @@ variable "subnet_id" {
   description = "Optional private subnetwork resource ID from stage 02."
 }
 
+variable "enable_vertex_psc_policy" {
+  type        = bool
+  default     = true
+  description = "Whether to provision a Network Connectivity Service Connection Policy for Vertex AI PSC automation when vpc_id and subnet_id are set."
+}
+
 variable "vpc_sc_perimeter_name" {
   type        = string
   default     = ""

@@ -24,6 +24,12 @@ data "google_project" "domains" {
   project_id = each.value
 }
 
+data "google_project" "ml_ops" {
+  count = local.trimmed_ml_ops_project != "" ? 1 : 0
+
+  project_id = local.trimmed_ml_ops_project
+}
+
 data "google_client_openid_userinfo" "caller" {}
 
 locals {
@@ -124,14 +130,15 @@ locals {
     local.domain_compilation_vars,
   )
 
-  vpc_sc_target_projects = distinct(concat(
+  vpc_sc_target_projects = distinct(compact(concat(
     [
       "projects/${data.google_project.core.number}",
       "projects/${data.google_project.etl.number}",
       "projects/${data.google_project.gold.number}",
     ],
     [for p in data.google_project.domains : "projects/${p.number}"],
-  ))
+    [for p in data.google_project.ml_ops : "projects/${p.number}"],
+  )))
 
   dataform_etl_account_id = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-dataform-etl"), 0, 30), "-")
   dataform_runtime_identities = [
@@ -148,6 +155,15 @@ locals {
     ? "serviceAccount:${local.caller_email}"
     : "user:${local.caller_email}"
   ) : ""
+}
+
+resource "terraform_data" "validate_ml_audit_inputs" {
+  lifecycle {
+    precondition {
+      condition     = local.trimmed_ml_audit_ds == "" || local.trimmed_ml_ops_project != ""
+      error_message = "ml_ops_project_id is required when ml_audit_dataset_id is explicitly set."
+    }
+  }
 }
 
 resource "google_project_service_identity" "dataform_agent" {
@@ -209,6 +225,17 @@ resource "google_bigquery_dataset_iam_member" "dataform_etl_bronze_viewer" {
   dataset_id = var.bronze_dataset_id
   role       = "roles/bigquery.dataViewer"
   member     = google_service_account.dataform_etl.member
+}
+
+resource "google_bigquery_dataset_iam_member" "dataform_etl_ml_audit_viewer" {
+  count = local.trimmed_ml_ops_project != "" ? 1 : 0
+
+  project    = local.trimmed_ml_ops_project
+  dataset_id = local.effective_ml_audit_dataset
+  role       = "roles/bigquery.dataViewer"
+  member     = google_service_account.dataform_etl.member
+
+  depends_on = [terraform_data.validate_ml_audit_inputs]
 }
 
 resource "google_bigquery_dataset_iam_member" "dataform_etl_runner" {
@@ -379,6 +406,7 @@ resource "time_sleep" "iam_and_kms_propagation" {
     google_service_account_iam_member.dataform_agent_sa_user,
     google_secret_manager_secret_iam_member.dataform_git_token,
     google_bigquery_dataset_iam_member.dataform_etl_bronze_viewer,
+    google_bigquery_dataset_iam_member.dataform_etl_ml_audit_viewer,
     google_bigquery_dataset_iam_member.dataform_etl_runner,
     google_project_iam_member.dataform_etl_job_user,
     google_project_iam_member.dataform_etl_catalog_viewer,

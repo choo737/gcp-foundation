@@ -29,8 +29,8 @@ on:
           - foundation/02-security-network
           - data/sandbox
           - data/enterprise/01-platform
-          - data/enterprise/02-governance-ops
           - data/enterprise/03-data-science
+          - data/enterprise/02-governance-ops
       enable_ds_stage:
         description: Merge optional 03-data-science outputs into foundation-outputs.json
         required: false
@@ -197,7 +197,11 @@ jobs:
                 ./scripts/link-stages.sh --env dev --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "${TARGET_STAGE}"
                 ;;
               data/enterprise/02-governance-ops)
-                ./scripts/link-stages.sh --env dev --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "${TARGET_STAGE}"
+                if [ "${ENABLE_DS_STAGE}" = "true" ] || gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/dev/03-data-science-outputs.json" >/dev/null 2>&1; then
+                  ./scripts/link-stages.sh --env dev --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json" "${TARGET_STAGE}"
+                else
+                  ./scripts/link-stages.sh --env dev --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "${TARGET_STAGE}"
+                fi
                 ;;
               data/enterprise/03-data-science)
                 ./scripts/link-stages.sh --env dev --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "${TARGET_STAGE}"
@@ -218,12 +222,12 @@ jobs:
                 STAGE_SLUG="$(basename "${TARGET_STAGE}")"
                 ./scripts/link-stages.sh --env dev --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/${STAGE_SLUG}-outputs.json" "${TARGET_STAGE}"
                 if [ "${TARGET_STAGE}" = "data/enterprise/02-governance-ops" ]; then
-                  if [ "${ENABLE_DS_STAGE}" = "true" ]; then
+                  if [ "${ENABLE_DS_STAGE}" = "true" ] || gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/dev/03-data-science-outputs.json" >/dev/null 2>&1; then
                     ./scripts/link-stages.sh --env dev --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json"
                   else
                     ./scripts/link-stages.sh --env dev --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json"
                   fi
-                elif [ "${TARGET_STAGE}" = "data/enterprise/03-data-science" ]; then
+                elif [ "${TARGET_STAGE}" = "data/enterprise/03-data-science" ] && gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/dev/02-governance-ops-outputs.json" >/dev/null 2>&1; then
                   ./scripts/link-stages.sh --env dev --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json"
                 fi
                 ;;
@@ -307,7 +311,11 @@ jobs:
                 ./scripts/link-stages.sh --env staging --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "${TARGET_STAGE}"
                 ;;
               data/enterprise/02-governance-ops)
-                ./scripts/link-stages.sh --env staging --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "${TARGET_STAGE}"
+                if [ "${ENABLE_DS_STAGE}" = "true" ] || gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/staging/03-data-science-outputs.json" >/dev/null 2>&1; then
+                  ./scripts/link-stages.sh --env staging --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json" "${TARGET_STAGE}"
+                else
+                  ./scripts/link-stages.sh --env staging --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "${TARGET_STAGE}"
+                fi
                 ;;
               data/enterprise/03-data-science)
                 ./scripts/link-stages.sh --env staging --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "${TARGET_STAGE}"
@@ -328,12 +336,12 @@ jobs:
                 STAGE_SLUG="$(basename "${TARGET_STAGE}")"
                 ./scripts/link-stages.sh --env staging --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/${STAGE_SLUG}-outputs.json" "${TARGET_STAGE}"
                 if [ "${TARGET_STAGE}" = "data/enterprise/02-governance-ops" ]; then
-                  if [ "${ENABLE_DS_STAGE}" = "true" ]; then
+                  if [ "${ENABLE_DS_STAGE}" = "true" ] || gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/staging/03-data-science-outputs.json" >/dev/null 2>&1; then
                     ./scripts/link-stages.sh --env staging --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json"
                   else
                     ./scripts/link-stages.sh --env staging --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json"
                   fi
-                elif [ "${TARGET_STAGE}" = "data/enterprise/03-data-science" ]; then
+                elif [ "${TARGET_STAGE}" = "data/enterprise/03-data-science" ] && gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/staging/02-governance-ops-outputs.json" >/dev/null 2>&1; then
                   ./scripts/link-stages.sh --env staging --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json"
                 fi
                 ;;
@@ -412,7 +420,11 @@ jobs:
                 ./scripts/link-stages.sh --env prod --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "${TARGET_STAGE}"
                 ;;
               data/enterprise/02-governance-ops)
-                ./scripts/link-stages.sh --env prod --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "${TARGET_STAGE}"
+                if [ "${ENABLE_DS_STAGE}" = "true" ] || gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/prod/03-data-science-outputs.json" >/dev/null 2>&1; then
+                  ./scripts/link-stages.sh --env prod --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json" "${TARGET_STAGE}"
+                else
+                  ./scripts/link-stages.sh --env prod --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "${TARGET_STAGE}"
+                fi
                 ;;
               data/enterprise/03-data-science)
                 ./scripts/link-stages.sh --env prod --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "${TARGET_STAGE}"
@@ -433,12 +445,12 @@ jobs:
                 STAGE_SLUG="$(basename "${TARGET_STAGE}")"
                 ./scripts/link-stages.sh --env prod --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/${STAGE_SLUG}-outputs.json" "${TARGET_STAGE}"
                 if [ "${TARGET_STAGE}" = "data/enterprise/02-governance-ops" ]; then
-                  if [ "${ENABLE_DS_STAGE}" = "true" ]; then
+                  if [ "${ENABLE_DS_STAGE}" = "true" ] || gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/prod/03-data-science-outputs.json" >/dev/null 2>&1; then
                     ./scripts/link-stages.sh --env prod --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json"
                   else
                     ./scripts/link-stages.sh --env prod --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json"
                   fi
-                elif [ "${TARGET_STAGE}" = "data/enterprise/03-data-science" ]; then
+                elif [ "${TARGET_STAGE}" = "data/enterprise/03-data-science" ] && gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/prod/02-governance-ops-outputs.json" >/dev/null 2>&1; then
                   ./scripts/link-stages.sh --env prod --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json"
                 fi
                 ;;

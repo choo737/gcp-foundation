@@ -42,6 +42,18 @@ variable "kms_key_id" {
   description = "Optional regional CMEK crypto key resource ID."
 }
 
+variable "manage_kms_iam" {
+  type        = bool
+  default     = true
+  description = "Whether Terraform manages Cloud KMS IAM bindings on kms_key_id."
+}
+
+variable "enable_vertex_psc_policy" {
+  type        = bool
+  default     = true
+  description = "Whether to provision a Network Connectivity Service Connection Policy for Vertex AI PSC automation when vpc_id and subnet_id are set."
+}
+
 variable "vpc_id" {
   type        = string
   default     = ""

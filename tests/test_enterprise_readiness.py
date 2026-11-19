@@ -867,6 +867,34 @@ class EnterpriseReadinessTest(unittest.TestCase):
             )
             self.assertNotEqual(bad_env.returncode, 0)
 
+            # 6) External stage dir outside repo_root resolves clean backend prefix without '../'.
+            ext_repo = tmp_path / "ext_repo"
+            ext_stage = ext_repo / "stages" / "enterprise"
+            (ext_repo / ".git").mkdir(parents=True)
+            (ext_stage / "envs").mkdir(parents=True)
+            tf_call_log.unlink(missing_ok=True)
+            ext_res = subprocess.run(
+                [
+                    str(script_path),
+                    "--env",
+                    "dev",
+                    "--tfstate-bucket",
+                    "bkt-state",
+                    "--export-gcs",
+                    "gs://bkt/ext-outputs.json",
+                    "../ext_repo/stages/enterprise",
+                ],
+                cwd=tmp_path / "stage_dst",
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(ext_res.returncode, 0, ext_res.stderr)
+            ext_calls = tf_call_log.read_text(encoding="utf-8")
+            self.assertIn("-backend-config=prefix=stages/enterprise/dev", ext_calls)
+            self.assertNotIn("..", ext_calls)
+
         # Bug #1, #2, #3 in terraform-deploy.yml and github-wif/main.tf.
         deploy_wf = (REPO_ROOT / ".github/workflows/terraform-deploy.yml").read_text(encoding="utf-8")
         self.assertIn("environment: shared", deploy_wf)
@@ -884,6 +912,11 @@ class EnterpriseReadinessTest(unittest.TestCase):
         self.assertIn("02-security-network-outputs.json", deploy_wf)
         self.assertIn("01-platform-outputs.json", deploy_wf)
         self.assertIn("02-governance-ops-outputs.json", deploy_wf)
+        self.assertIn("03-data-science-outputs.json", deploy_wf)
+        self.assertLess(
+            deploy_wf.index("- data/enterprise/03-data-science"),
+            deploy_wf.index("- data/enterprise/02-governance-ops"),
+        )
 
         wif_main = (REPO_ROOT / "modules/foundation/github-wif/main.tf").read_text(encoding="utf-8")
         self.assertIn("(!('environment' in assertion) || assertion.environment in [${local.env_list_cel}])", wif_main)
