@@ -80,6 +80,7 @@ locals {
     "bigquery.googleapis.com",
     "storage.googleapis.com",
     "dataplex.googleapis.com",
+    "run.googleapis.com",
   ])
 
   created_vpc_sc_projects = local.create_projects ? {
@@ -168,7 +169,7 @@ module "ml_ops_project" {
 
   activate_apis = concat(
     tolist(local.ds_required_apis),
-    ["iam.googleapis.com"],
+    ["compute.googleapis.com", "iam.googleapis.com"],
   )
 
   depends_on = [terraform_data.validate_stage_inputs]
@@ -221,6 +222,15 @@ resource "google_compute_shared_vpc_service_project" "ds_exp" {
 
   host_project    = local.effective_shared_vpc_host
   service_project = module.ds_exp_project[0].project_id
+
+  depends_on = [time_sleep.ds_api_propagation]
+}
+
+resource "google_compute_shared_vpc_service_project" "ml_ops" {
+  count = local.create_projects && local.effective_shared_vpc_host != "" ? 1 : 0
+
+  host_project    = local.effective_shared_vpc_host
+  service_project = module.ml_ops_project[0].project_id
 
   depends_on = [time_sleep.ds_api_propagation]
 }
@@ -296,6 +306,31 @@ resource "google_project_service_identity" "artifactregistry_ml_ops" {
   service = "artifactregistry.googleapis.com"
 
   depends_on = [time_sleep.ds_api_propagation]
+}
+
+resource "google_project_service_identity" "cloudrun_ml_ops" {
+  count    = var.enable_data_science ? 1 : 0
+  provider = google-beta
+
+  project = local.effective_ml_ops_project_id
+  service = "run.googleapis.com"
+
+  depends_on = [time_sleep.ds_api_propagation]
+}
+
+resource "google_compute_subnetwork_iam_member" "cloudrun_ml_ops_network_user" {
+  count = var.enable_data_science && local.effective_shared_vpc_host != "" && local.effective_subnet_id != "" ? 1 : 0
+
+  project    = local.effective_shared_vpc_host
+  region     = var.region
+  subnetwork = element(split("/", local.effective_subnet_id), length(split("/", local.effective_subnet_id)) - 1)
+  role       = "roles/compute.networkUser"
+  member     = google_project_service_identity.cloudrun_ml_ops[0].member
+
+  depends_on = [
+    google_compute_shared_vpc_service_project.ml_ops,
+    google_project_service_identity.cloudrun_ml_ops,
+  ]
 }
 
 data "google_storage_project_service_account" "ml_ops" {
@@ -458,6 +493,27 @@ resource "google_bigquery_dataset_iam_member" "silver_viewer" {
   member     = each.value
 }
 
+resource "google_bigquery_dataset_iam_member" "aiplatform_ml_ops_silver_viewer" {
+  count = var.enable_data_science && local.trimmed_core != "" && local.trimmed_silver != "" ? 1 : 0
+
+  project    = local.trimmed_core
+  dataset_id = local.trimmed_silver
+  role       = "roles/bigquery.dataViewer"
+  member     = google_project_service_identity.aiplatform_ml_ops[0].member
+
+  depends_on = [google_project_service_identity.aiplatform_ml_ops]
+}
+
+resource "google_project_iam_member" "aiplatform_ml_ops_bq_job_user" {
+  count = var.enable_data_science ? 1 : 0
+
+  project = local.effective_ml_ops_project_id
+  role    = "roles/bigquery.jobUser"
+  member  = google_project_service_identity.aiplatform_ml_ops[0].member
+
+  depends_on = [google_project_service_identity.aiplatform_ml_ops]
+}
+
 resource "google_bigquery_dataset_iam_member" "gold_viewer" {
   for_each = local.trimmed_gold != "" && local.trimmed_gold_ds != "" ? local.dataset_viewer_members : {}
 
@@ -493,6 +549,10 @@ resource "time_sleep" "ds_cmek_and_iam_propagation" {
     google_kms_crypto_key_iam_member.ar_ml_ops_cmek,
     google_kms_crypto_key_iam_member.dataplex_ml_ops_cmek,
     google_compute_subnetwork_iam_member.workbench_network_user,
+    google_compute_shared_vpc_service_project.ml_ops,
+    google_compute_subnetwork_iam_member.cloudrun_ml_ops_network_user,
+    google_bigquery_dataset_iam_member.aiplatform_ml_ops_silver_viewer,
+    google_project_iam_member.aiplatform_ml_ops_bq_job_user,
     google_project_iam_member.dataplex_ml_ops_job_user,
     google_project_iam_member.dataplex_ml_ops_service_agent,
   ]

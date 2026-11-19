@@ -36,16 +36,17 @@ flowchart LR
     S0["foundation/00-bootstrap"] --> S1["foundation/01-org-governance"]
     S1 --> S2["foundation/02-security-network"]
     S2 --> D1["data/enterprise/01-platform"]
-    D1 --> D2["data/enterprise/02-governance-ops"]
     D1 --> D3["data/enterprise/03-data-science"]
+    D1 --> D2["data/enterprise/02-governance-ops"]
+    D3 -. "optional XAI dataset" .-> D2
     SB["data/sandbox"]
 ```
 
 | Path | Target Scope | Stage Sequence |
 | --- | --- | --- |
 | Path 0: Bootstrap | Existing seed project | `foundation/00-bootstrap` |
-| Path 1: Greenfield | Org or top folder | `foundation/01-org-governance` -> `foundation/02-security-network` -> `data/enterprise/01-platform` -> `data/enterprise/02-governance-ops` -> `data/enterprise/03-data-science` |
-| Path 2: Brownfield | Existing `data-platform` folder | `data/enterprise/01-platform` -> `data/enterprise/02-governance-ops` -> `data/enterprise/03-data-science` |
+| Path 1: Greenfield | Org or top folder | `foundation/01-org-governance` -> `foundation/02-security-network` -> `data/enterprise/01-platform` -> `data/enterprise/03-data-science` -> `data/enterprise/02-governance-ops` |
+| Path 2: Brownfield | Existing `data-platform` folder | `data/enterprise/01-platform` -> `data/enterprise/03-data-science` -> `data/enterprise/02-governance-ops` |
 | Path 3: Sandbox | One existing GCP project | `data/sandbox` |
 
 - **Bootstrap & WIF**: Provisions hardened `tfstate` and `iac-outputs` buckets with soft delete plus keyless GitHub Actions WIF.
@@ -61,7 +62,7 @@ Import optional gitignored `platform-context.json` from [gcp-launchpad](https://
 1. **Day 0 Bootstrap**: Create a private repo, configure [CODEOWNERS](CODEOWNERS) and GitHub Environments, and apply `foundation/00-bootstrap`.
 2. **Day 1A Org Governance**: Complete [QUESTIONNAIRE.md](QUESTIONNAIRE.md) and apply `foundation/01-org-governance` for folders, audit locks, budgets, and SCC.
 3. **Day 1B Network & KMS**: Link stage outputs and apply `foundation/02-security-network` per environment (`dev`, `staging`, `prod`).
-4. **Day 1C Data Platform & Export**: Apply `01-platform` and `02-governance-ops`, then export non-sensitive outputs to GCS via `link-stages.sh`.
+4. **Day 1C Data Platform & Export**: Apply `01-platform`, optional `03-data-science`, and `02-governance-ops`, then export non-sensitive outputs to GCS via `link-stages.sh`.
 5. **Day 2 Extend Domains & Scans**: Add `domain_marts` in `01-platform` and declarative `additional_quality_scans` or slot overrides in `02-governance-ops`.
 6. **Day 2 Operate & Decommission**: Query BigQuery SCC findings, run `drift-safe-apply`, and follow `docs/04-multi-env-and-decommission.md` for teardown.
 
@@ -72,8 +73,8 @@ export ENV="dev"
 ./scripts/link-stages.sh --env "${ENV}" foundation/01-org-governance foundation/02-security-network
 make apply STAGE="foundation/02-security-network" ENV="${ENV}" TFSTATE_BUCKET="${TFSTATE_BUCKET}"
 
-./scripts/link-stages.sh --env "${ENV}" --export-gcs "gs://<iac-outputs-bucket>/foundation-${ENV}.json" \
-  foundation/02-security-network data/enterprise/01-platform data/enterprise/02-governance-ops
+./scripts/link-stages.sh --env "${ENV}" --export-gcs "gs://<iac-outputs-bucket>/foundation-outputs.json" \
+  foundation/02-security-network data/enterprise/01-platform data/enterprise/03-data-science data/enterprise/02-governance-ops
 ```
 
 ## AI Coding Agent Quickstart

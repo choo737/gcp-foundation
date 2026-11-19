@@ -895,6 +895,31 @@ class EnterpriseReadinessTest(unittest.TestCase):
             self.assertIn("-backend-config=prefix=stages/enterprise/dev", ext_calls)
             self.assertNotIn("..", ext_calls)
 
+            # 7) foundation/01-org-governance always uses /shared prefix even under --env dev.
+            org_gov_stage = ext_repo / "foundation" / "01-org-governance"
+            org_gov_stage.mkdir(parents=True)
+            (org_gov_stage / "versions.tf").write_text('terraform {\n  backend "gcs" {}\n}\n', encoding="utf-8")
+            tf_call_log.unlink(missing_ok=True)
+            org_res = subprocess.run(
+                [
+                    str(script_path),
+                    "--env",
+                    "dev",
+                    "--tfstate-bucket",
+                    "bkt-state",
+                    "--export-gcs",
+                    "gs://bkt/org-outputs.json",
+                    "../ext_repo/foundation/01-org-governance",
+                ],
+                cwd=tmp_path / "stage_dst",
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(org_res.returncode, 0, org_res.stderr)
+            self.assertIn("-backend-config=prefix=foundation/01-org-governance/shared", tf_call_log.read_text(encoding="utf-8"))
+
         # Bug #1, #2, #3 in terraform-deploy.yml and github-wif/main.tf.
         deploy_wf = (REPO_ROOT / ".github/workflows/terraform-deploy.yml").read_text(encoding="utf-8")
         self.assertIn("environment: shared", deploy_wf)

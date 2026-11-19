@@ -323,12 +323,20 @@ def resolve_backend_prefix(raw_src: str, src_abs: Path, env: str) -> str:
             rel_stage = resolved_src.relative_to(ext_root).as_posix()
         else:
             rel_stage = resolved_src.name
-    return f"{rel_stage}/{env}"
+    effective_env = "shared" if rel_stage == "foundation/01-org-governance" else env
+    return f"{rel_stage}/{effective_env}"
+
+
+def stage_uses_gcs_backend(stage_abs: Path) -> bool:
+    if (stage_abs / "envs").is_dir():
+        return True
+    versions_tf = stage_abs / "versions.tf"
+    return versions_tf.is_file() and 'backend "gcs"' in versions_tf.read_text(encoding="utf-8")
 
 
 def read_stage_outputs(raw_src: str, env: str, state_bucket: str) -> dict[str, object]:
     src_abs = Path(raw_src).resolve()
-    if env and state_bucket and (src_abs / "envs").is_dir():
+    if env and state_bucket and stage_uses_gcs_backend(src_abs):
         backend_prefix = resolve_backend_prefix(raw_src, src_abs, env)
         subprocess.run(
             [
@@ -504,7 +512,15 @@ def resolve_backend_prefix(raw_src: str, src_abs: Path, env: str) -> str:
             rel_stage = resolved_src.relative_to(ext_root).as_posix()
         else:
             rel_stage = resolved_src.name
-    return f"{rel_stage}/{env}"
+    effective_env = "shared" if rel_stage == "foundation/01-org-governance" else env
+    return f"{rel_stage}/{effective_env}"
+
+
+def stage_uses_gcs_backend(stage_abs: Path) -> bool:
+    if (stage_abs / "envs").is_dir():
+        return True
+    versions_tf = stage_abs / "versions.tf"
+    return versions_tf.is_file() and 'backend "gcs"' in versions_tf.read_text(encoding="utf-8")
 
 
 var_re = re.compile(r'^\s*variable\s+"([A-Za-z0-9_]+)"\s*\{', re.MULTILINE)
@@ -532,7 +548,7 @@ if mode == "from-gcs":
 else:
     for raw_src in sources:
         src_abs = Path(raw_src).resolve()
-        if env_name and tfstate_bucket and (src_abs / "envs").is_dir():
+        if env_name and tfstate_bucket and stage_uses_gcs_backend(src_abs):
             backend_prefix = resolve_backend_prefix(raw_src, src_abs, env_name)
             subprocess.run(
                 [

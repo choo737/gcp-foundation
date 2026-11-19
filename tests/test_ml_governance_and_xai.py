@@ -212,6 +212,12 @@ class MlGovernanceAndXaiTest(unittest.TestCase):
         self.assertIn('resource "google_bigquery_dataset_iam_member" "dataform_etl_ml_audit_viewer"', gov_main)
         self.assertIn('data "google_project" "ml_ops"', gov_main)
         self.assertIn('resource "terraform_data" "validate_ml_audit_inputs"', gov_main)
+        self.assertIn('"run.googleapis.com"', ds_main)
+        self.assertIn('resource "google_compute_shared_vpc_service_project" "ml_ops"', ds_main)
+        self.assertIn('resource "google_project_service_identity" "cloudrun_ml_ops"', ds_main)
+        self.assertIn('resource "google_compute_subnetwork_iam_member" "cloudrun_ml_ops_network_user"', ds_main)
+        self.assertIn('resource "google_bigquery_dataset_iam_member" "aiplatform_ml_ops_silver_viewer"', ds_main)
+        self.assertIn('resource "google_project_iam_member" "aiplatform_ml_ops_bq_job_user"', ds_main)
 
     def test_stage_03_tier_resolution_and_colab_fsi_block_with_terraform(self) -> None:
         tf_bin = shutil.which("terraform")
