@@ -117,7 +117,7 @@ Create a private template repo first, link stages with scripts/link-stages.sh, a
 - `scripts/`: `link-stages.sh` for stage linking plus `configure-bq-dr-replica.sh` and `verify-scc-detectors.sh` for Day-2 ops.
 - `QUESTIONNAIRE.md`: Tier-2 intake form mapping compliance, SCC, VPC-SC, FinOps, and slot choices to `.tfvars`.
 - `CODEOWNERS`: Enforces `@choo737` review ownership across foundation, data, module, and workflow paths.
-- `docs/`: Architecture, entry points, Cloudera mapping, decommission playbook, and enterprise operationalization guide.
+- `docs/`: Architecture, entry points, decommission playbook, and enterprise operationalization guide.
 - `tests/`: Python unit tests checking symmetry, anti-leak rules, Terraform safety, SCC wiring, and operational readiness.
 
 ## Quick Verification
@@ -134,7 +134,6 @@ make test
 - [Tier-2 Foundation and Data Platform Questionnaire](QUESTIONNAIRE.md)
 - [Architecture Overview](docs/01-architecture.md)
 - [Entry Points Guide](docs/02-entry-points.md)
-- [Cloudera to BigQuery Mapping](docs/03-cloudera-to-bigquery.md)
 - [Multi-Environment Rollout and Decommissioning](docs/04-multi-env-and-decommission.md)
 - [Enterprise Operationalization Guide](docs/05-enterprise-operationalization-guide.md)
 
