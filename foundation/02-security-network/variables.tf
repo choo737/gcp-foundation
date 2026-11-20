@@ -13,13 +13,13 @@ variable "folder_id" {
 variable "environment_folder_ids" {
   type        = map(string)
   default     = {}
-  description = "Optional map of environment names to 02-environments/<env> folder IDs from stage 01."
+  description = "Optional map of environment names to environments/<env> folder IDs from stage 01."
 }
 
 variable "environment_network_folder_ids" {
   type        = map(string)
   default     = {}
-  description = "Optional map of environment names to 02-environments/<env>/network folder IDs from stage 01."
+  description = "Optional map of environment names to environments/<env>/network folder IDs from stage 01."
 }
 
 variable "environment" {

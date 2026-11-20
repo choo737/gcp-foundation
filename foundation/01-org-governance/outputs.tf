@@ -20,7 +20,7 @@ output "data_folder_id" {
 
 output "environment_folder_ids" {
   value       = module.folder_hierarchy.environment_folder_ids
-  description = "Map of environment names to 02-environments/<env> folder resource names."
+  description = "Map of environment names to environments/<env> folder resource names."
 }
 
 output "environment_data_platform_folder_ids" {

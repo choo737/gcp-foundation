@@ -4,7 +4,7 @@ This guide explains how to promote `dev`, `staging`, and `prod` safely and tear 
 
 ## 1. Environment Promotion (`dev` -> `staging` -> `prod`)
 
-Stage `01-org-governance` deploys once per foundation root and creates `02-environments/{dev,staging,prod}`.
+Stage `01-org-governance` deploys once per foundation root and creates `environments/{dev,staging,prod}`.
 Stages `02-security-network`, `01-platform`, and `02-governance-ops` deploy once per environment with separate remote state prefixes.
 
 ```bash

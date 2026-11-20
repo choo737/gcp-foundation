@@ -34,13 +34,13 @@ variable "deletion_protection" {
 variable "workload_folders" {
   type        = set(string)
   default     = ["data-platform"]
-  description = "Workload pillar folder names created under 02-workloads."
+  description = "Workload pillar folder names created under workloads."
 }
 
 variable "environments" {
   type        = list(string)
   default     = ["dev", "staging", "prod"]
-  description = "Environment folder names created under 02-environments (for example [\"dev\", \"staging\", \"prod\"] or [\"dev\", \"uat\", \"prod\"])."
+  description = "Environment folder names created under environments (for example [\"dev\", \"staging\", \"prod\"] or [\"dev\", \"uat\", \"prod\"])."
 
   validation {
     condition     = length(var.environments) > 0 && alltrue([for e in var.environments : can(regex("^[a-z0-9-]+$", e))])

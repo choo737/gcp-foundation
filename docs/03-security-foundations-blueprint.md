@@ -21,16 +21,16 @@ Enforce phishing-resistant MFA on all human administrator and break-glass accoun
 
 ## 2. Organization Structure
 
-Use `02-environments/<env>/<department>` as the primary `[Folder]` and `[Project]` hierarchy.
+Use `environments/<env>/<department>` as the primary `[Folder]` and `[Project]` hierarchy.
 
 ```text
 Root [Folder]: <prefix>-<suffix>-gcp-foundation
-├── 01-shared-infrastructure [Folder]
+├── shared-infrastructure [Folder]
 │   ├── <prefix>-<suffix>-audit [Project] (CloudOps / Security)
 │   ├── <prefix>-<suffix>-cmn-secops [Project] (SecOps Analysts)
 │   ├── <prefix>-<suffix>-cmn-finops [Project] (FinOps Admins)
 │   └── <prefix>-<suffix>-cmn-backup [Project] (CloudOps Admins)
-└── 02-environments [Folder]
+└── environments [Folder]
     └── {dev, uat, staging, prod} [Folder]
         ├── <prefix>-<suffix>-network [Project] (Network Admins)
         ├── data-platform [Folder] -> storage / compute (Data Teams)

@@ -51,7 +51,7 @@ variable "dr_region" {
 variable "environments" {
   type        = list(string)
   default     = ["dev", "staging", "prod"]
-  description = "Environment folder names provisioned under 02-environments (for example [\"dev\", \"uat\", \"staging\", \"prod\"])."
+  description = "Environment folder names provisioned under environments (for example [\"dev\", \"uat\", \"staging\", \"prod\"])."
 }
 
 variable "deletion_protection" {

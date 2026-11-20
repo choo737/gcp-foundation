@@ -4,7 +4,7 @@ This stage deploys KMS keys, VPC controls, VPC-SC perimeters, and Cloud Monitori
 
 ## Resources Deployed
 
-- `${prefix}-network` project placed in `02-environments/<env>` or `shared_infra_folder_id`.
+- `${prefix}-network` project placed in `environments/<env>` or `shared_infra_folder_id`.
 - Primary and optional DR Cloud KMS key rings and crypto keys.
 - Optional Shared VPC host, subnet with Flow Logs, DNS logging, and Datastream PSC attachment.
 - Optional PSC endpoint with `googleapis.com.`, `pkg.dev.`, and `gcr.io.` private DNS zones.

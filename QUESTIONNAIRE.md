@@ -136,7 +136,7 @@ Size dedicated FinOps billing exports, multi-tier budgets, BigQuery reservations
 | `finops_billing_export_location` | `"US"` | BigQuery export location | `"US"` or `"EU"` gets 2-month backfill |
 | `enable_billing_budget` | `true` | Creates Cloud Billing budgets | Alert-only; zero auto-kill |
 | `monthly_budget_amount` | `500` | Master monthly threshold in whole currency units | Alerts at 50%, 80%, 90%, 100%, and 100% forecast |
-| `environment_budgets` | `{}` | Map of env name to monthly budget amount | Scoped to `02-environments/<env>` folders |
+| `environment_budgets` | `{}` | Map of env name to monthly budget amount | Scoped to `environments/<env>` folders |
 | `workload_budgets` | `{}` | Map of workload budgets by project or label | Supports custom per-workload `alert_emails` |
 | `department_budgets` | `{}` | Map of `cost_center` keys (`platform`, `shared`, `data`, `ai`, `app`, `security`, `network`) to amounts | Scoped to billing label `cost_center` |
 | `finops_billing_export_table_name` | `""` | Export table name for `v_finops_department_spend` | Set after Console Billing Export creates table |
@@ -189,7 +189,7 @@ Configure optional experimentation and MLOps isolation, Workbench hardening, and
 
 ## 7. Application Team Project Factory (`apps/enterprise`)
 
-Provision isolated Cloud Run, GKE, and Cloud SQL application projects under `02-environments/<env>/app`.
+Provision isolated Cloud Run, GKE, and Cloud SQL application projects under `environments/<env>/app`.
 
 | Variable | Default | Purpose | Notes |
 | --- | --- | --- | --- |

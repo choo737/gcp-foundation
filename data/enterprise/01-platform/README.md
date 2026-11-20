@@ -4,7 +4,7 @@ This stage deploys separated governance, storage, and compute projects under env
 
 ## Works Greenfield or Brownfield
 
-- Chained after `foundation/`: resolves `02-environments/<env>/data-platform/{storage,compute}` automatically.
+- Chained after `foundation/`: resolves `environments/<env>/data-platform/{storage,compute}` automatically.
 - Brownfield standalone: pass any existing `data_folder_id` and `billing_account`.
 
 ## Resources Deployed

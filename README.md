@@ -37,12 +37,12 @@ Deployed Google Cloud Resource Manager folder, project, and team ownership tree:
 
 ```text
 <prefix>-<suffix>-gcp-foundation [Folder] (CloudOps Admins / Security Admins)
-├── 01-shared-infrastructure [Folder] (CloudOps Admins)
+├── shared-infrastructure [Folder] (CloudOps Admins)
 │   ├── <prefix>-<suffix>-audit [Project] (CloudOps Admins / Security Admins)
 │   ├── <prefix>-<suffix>-cmn-secops [Project] (SecOps Analysts)
 │   ├── <prefix>-<suffix>-cmn-finops [Project] (FinOps Admins)
 │   └── <prefix>-<suffix>-cmn-backup [Project] (CloudOps Admins)
-└── 02-environments [Folder]
+└── environments [Folder]
     └── {dev, uat, staging, prod} [Folder]
         ├── network [Folder] -> <prefix>-<suffix>-network [Project] (Network Admins)
         ├── data-platform [Folder] -> storage & compute [Folders] (Data Teams)
@@ -72,7 +72,7 @@ flowchart LR
 | Path 3: Sandbox | One existing GCP project | `data/sandbox` |
 
 - **Bootstrap & WIF**: Provisions hardened `tfstate` and `iac-outputs` buckets with soft delete plus keyless GitHub Actions WIF.
-- **Org Governance & SecOps**: Deploys `02-environments`, locked logs, `cmn-secops`, Stage-01 CMEK, FinOps, Backup & DR, 38 Org Policies, and SCC.
+- **Org Governance & SecOps**: Deploys `environments`, locked logs, `cmn-secops`, Stage-01 CMEK, FinOps, Backup & DR, 38 Org Policies, and SCC.
 - **Security & Network**: Configures HSM CMEK, Shared VPC, `data`/`ai`/`app` subnets, Cloud NGFW, `GCE_FIREWALL` tags, PSC, and VPC-SC.
 - **Enterprise Data & Apps**: Separates governance, storage, compute, AI (`03-data-science`), and isolated app projects (`apps/enterprise`).
 
@@ -120,7 +120,7 @@ Create a private template repo first, link stages with scripts/link-stages.sh, a
 | `setup-customer-foundation` | `.agents/skills/setup-customer-foundation/SKILL.md` | Full private repo onboarding, intake, linking, and post-deploy verification |
 | `choose-entry-point` | `.agents/skills/choose-entry-point/SKILL.md` | Select Path 0-3 based on permissions and existing landing zone |
 | `add-data-domain` | `.agents/skills/add-data-domain/SKILL.md` | Add Gold domain projects and re-link `01-platform` to `02-governance-ops` |
-| `add-workload-pillar` | `.agents/skills/add-workload-pillar/SKILL.md` | Onboard new workload folders across `02-environments` or `02-workloads` |
+| `add-workload-pillar` | `.agents/skills/add-workload-pillar/SKILL.md` | Onboard new workload folders across `environments` or `workloads` |
 | `drift-safe-apply` | `.agents/skills/drift-safe-apply/SKILL.md` | Link outputs, inspect plans, and import pre-existing resources safely |
 
 ## CI/CD Workflows

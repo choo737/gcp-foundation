@@ -9,12 +9,12 @@ Deployed Google Cloud Resource Manager `[Folder]`, `[Project]`, and `(Owner Team
 ```text
 organizations/<org_id> (or folders/<parent_id>)
 └── <prefix>-<suffix>-gcp-foundation [Folder] (CloudOps Admins / Security Admins)
-    ├── 01-shared-infrastructure [Folder] (CloudOps Admins)
+    ├── shared-infrastructure [Folder] (CloudOps Admins)
     │   ├── <prefix>-<suffix>-audit [Project] (CloudOps Admins / Security Admins)
     │   ├── <prefix>-<suffix>-cmn-secops [Project] (SecOps Analysts)
     │   ├── <prefix>-<suffix>-cmn-finops [Project] (FinOps Admins)
     │   └── <prefix>-<suffix>-cmn-backup [Project] (CloudOps Admins)
-    ├── 02-environments [Folder]
+    ├── environments [Folder]
     │   └── {dev, uat, staging, prod} [Folder]
     │       ├── network [Folder] (Network Admins)
     │       │   └── <prefix>-<suffix>-network [Project] (Network Admins)
@@ -32,7 +32,7 @@ organizations/<org_id> (or folders/<parent_id>)
     │       └── app [Folder] (App Admins)
     │           └── <display_name> [Folder] (App Team)
     │               └── <prefix>-<suffix>-app-<key> [Project] (App Developers)
-    └── 02-workloads [Folder]
+    └── workloads [Folder]
         └── data-platform [Folder] (brownfield fallback)
 ```
 

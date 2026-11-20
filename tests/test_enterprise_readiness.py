@@ -42,7 +42,7 @@ class EnterpriseReadinessTest(unittest.TestCase):
     def test_multi_env_folder_hierarchy_and_stage_resolution(self) -> None:
         fh_main = (REPO_ROOT / "modules" / "foundation" / "folder-hierarchy" / "main.tf").read_text(encoding="utf-8")
         fh_out = (REPO_ROOT / "modules" / "foundation" / "folder-hierarchy" / "outputs.tf").read_text(encoding="utf-8")
-        self.assertIn('"02-environments"', fh_main)
+        self.assertIn('"environments"', fh_main)
         for out_name in (
             "environment_folder_ids",
             "environment_data_platform_folder_ids",

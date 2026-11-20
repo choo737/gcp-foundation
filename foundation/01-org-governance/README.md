@@ -4,7 +4,7 @@ This stage deploys folders, the audit project, locked logging, FinOps, and Secur
 
 ## Resources Deployed
 
-- Root, `01-shared-infrastructure`, `02-workloads`, and `02-environments/{dev,staging,prod}` folders.
+- Root, `shared-infrastructure`, `workloads`, and `environments/{dev,staging,prod}` folders.
 - `${prefix}-audit` project protected by a Resource Manager deletion lien and Stage-01 CMEK key.
 - Optional `${prefix}-cmn-finops` project for `"US"` billing export, multi-tier budgets, and email channels.
 - Optional `${prefix}-cmn-backup` project with an immutable Backup Vault and daily GCE/Cloud SQL plans.

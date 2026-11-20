@@ -17,13 +17,13 @@ locals {
 }
 
 resource "google_folder" "shared_infra" {
-  display_name        = "01-shared-infrastructure"
+  display_name        = "shared-infrastructure"
   parent              = local.top_parent
   deletion_protection = var.deletion_protection
 }
 
 resource "google_folder" "workloads" {
-  display_name        = "02-workloads"
+  display_name        = "workloads"
   parent              = local.top_parent
   deletion_protection = var.deletion_protection
 }
@@ -39,7 +39,7 @@ resource "google_folder" "workload" {
 resource "google_folder" "environments" {
   count = length(var.environments) > 0 ? 1 : 0
 
-  display_name        = "02-environments"
+  display_name        = "environments"
   parent              = local.top_parent
   deletion_protection = var.deletion_protection
 }

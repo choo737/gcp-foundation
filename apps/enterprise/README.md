@@ -1,6 +1,6 @@
 # Enterprise Application Factory Stage
 
-This stage provisions isolated application projects under `02-environments/<env>/app` using `modules/app/workload-factory`.
+This stage provisions isolated application projects under `environments/<env>/app` using `modules/app/workload-factory`.
 
 ## Inputs Linked Upstream
 

@@ -5,12 +5,12 @@ output "root_folder_id" {
 
 output "shared_infra_folder_id" {
   value       = google_folder.shared_infra.name
-  description = "Resource name of the 01-shared-infrastructure folder."
+  description = "Resource name of the shared-infrastructure folder."
 }
 
 output "workloads_folder_id" {
   value       = google_folder.workloads.name
-  description = "Resource name of the 02-workloads folder."
+  description = "Resource name of the workloads folder."
 }
 
 output "workload_folder_ids" {
@@ -20,12 +20,12 @@ output "workload_folder_ids" {
 
 output "environment_folder_ids" {
   value       = { for k, f in google_folder.env : k => f.name }
-  description = "Map of environment names to 02-environments/<env> folder resource names."
+  description = "Map of environment names to environments/<env> folder resource names."
 }
 
 output "environment_data_platform_folder_ids" {
   value       = { for k, f in google_folder.env_data_platform : k => f.name }
-  description = "Map of environment names to 02-environments/<env>/data-platform folder resource names."
+  description = "Map of environment names to environments/<env>/data-platform folder resource names."
 }
 
 output "environment_storage_folder_ids" {

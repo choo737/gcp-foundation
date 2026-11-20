@@ -87,7 +87,7 @@ make apply STAGE="data/enterprise/02-governance-ops" ENV="${ENV}" TFSTATE_BUCKET
 4. Domain code `ret` also maps `gold_retail_project` and `gold_retail_dataset` for `gcp-data-medallion`.
 5. Add extra Dataplex Auto Data Quality scans declaratively using `additional_quality_scans` inside `data/enterprise/02-governance-ops/envs/<env>.tfvars`.
 6. Tune `baseline_slots` and `max_slots` in `01-platform/envs/<env>.tfvars` to scale BigQuery `ENTERPRISE` reservations.
-7. Add new workload folders through `workload_folders` in `foundation/01-org-governance` or per-environment folders under `02-environments`.
+7. Add new workload folders through `workload_folders` in `foundation/01-org-governance` or per-environment folders under `environments`.
 
 ```hcl
 # Example inside data/enterprise/02-governance-ops/envs/dev.tfvars
