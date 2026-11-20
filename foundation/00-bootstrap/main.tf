@@ -4,7 +4,9 @@ provider "google" {
 }
 
 locals {
-  bucket_prefix = var.project_suffix != "" ? "${var.prefix}-${var.project_suffix}" : var.prefix
+  auto_code                = substr(sha256("${var.project_id}-${var.prefix}-bootstrap"), 0, 4)
+  effective_project_suffix = var.project_suffix != "" ? var.project_suffix : (var.auto_unique_suffix ? local.auto_code : "")
+  bucket_prefix            = local.effective_project_suffix != "" ? "${var.prefix}-${local.effective_project_suffix}" : var.prefix
 
   required_apis = toset([
     "iamcredentials.googleapis.com",
@@ -26,6 +28,12 @@ locals {
   )
 
   include_tf_ds_ci = contains(keys(var.ci_repository_map), "tf_ds_ci")
+  include_tf_app_ci = (
+    var.foundation_sa_mode == "per_stage" ||
+    contains(keys(var.ci_repository_map), "tf_app_ci")
+  )
+  include_secops_ci = contains(keys(var.ci_repository_map), "secops_ci")
+  include_finops_ci = contains(keys(var.ci_repository_map), "finops_ci")
 
   ci_service_accounts = merge(
     local.include_tf_foundation_ci ? {
@@ -59,6 +67,27 @@ locals {
         description  = "Service account for GitHub Actions gcp-data-science Terraform runs."
       }
     } : {},
+    local.include_tf_app_ci ? {
+      tf_app_ci = {
+        account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-tf-app-ci"), 0, 30), "-")
+        display_name = "${var.prefix} App Factory CI"
+        description  = "Service account for GitHub Actions apps/enterprise Terraform runs."
+      }
+    } : {},
+    local.include_secops_ci ? {
+      secops_ci = {
+        account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-secops-ci"), 0, 30), "-")
+        display_name = "${var.prefix} SecOps CI"
+        description  = "Service account for GitHub Actions SecOps Terraform runs."
+      }
+    } : {},
+    local.include_finops_ci ? {
+      finops_ci = {
+        account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-finops-ci"), 0, 30), "-")
+        display_name = "${var.prefix} FinOps CI"
+        description  = "Service account for GitHub Actions FinOps Terraform runs."
+      }
+    } : {},
     {
       tf_ingestion_ci = {
         account_id   = trimsuffix(substr(lower("${replace(var.prefix, "_", "-")}-tf-ingestion-ci"), 0, 30), "-")
@@ -80,12 +109,20 @@ locals {
       data_plat_ci    = "data/"
       tf_ingestion_ci = "ingestion/"
       tf_ds_ci        = "data-science/"
+      tf_app_ci       = "apps/"
+      secops_ci       = "foundation/01-org-governance/"
+      finops_ci       = "foundation/01-org-governance/"
     } : k => prefix
     if var.enable_ci_service_accounts && contains(keys(local.ci_service_accounts), k)
   }
 
   iac_outputs_admin_sas = toset([
     for k in ["tf_foundation_ci", "org_gov_ci", "net_sec_ci", "data_plat_ci"] : k
+    if var.enable_ci_service_accounts && contains(keys(local.ci_service_accounts), k)
+  ])
+
+  shared_ops_iac_sas = toset([
+    for k in ["secops_ci", "finops_ci"] : k
     if var.enable_ci_service_accounts && contains(keys(local.ci_service_accounts), k)
   ])
 
@@ -127,7 +164,7 @@ resource "google_storage_bucket" "tfstate" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
   force_destroy               = var.force_destroy
-  labels                      = var.labels
+  labels                      = merge(var.labels, { cost_center = "platform", environment = "shared" })
 
   versioning {
     enabled = true
@@ -157,7 +194,7 @@ resource "google_storage_bucket" "iac_outputs" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
   force_destroy               = var.force_destroy
-  labels                      = var.labels
+  labels                      = merge(var.labels, { cost_center = "platform", environment = "shared" })
 
   versioning {
     enabled = true
@@ -262,6 +299,50 @@ resource "google_storage_bucket_iam_member" "iac_outputs_ds_prefix_admin" {
     title       = "tf_ds_ci_outputs_prefix"
     description = "Allow data science CI to export outputs under data-science/ prefix."
     expression  = "(resource.type == \"storage.googleapis.com/Bucket\" && (api.getAttribute(\"storage.googleapis.com/objectListPrefix\", \"\").startsWith(\"data-science/\") || api.getAttribute(\"storage.googleapis.com/objectListPrefix\", \"\") == \"data-science\")) || (resource.type == \"storage.googleapis.com/Object\" && resource.name.startsWith(\"projects/_/buckets/${google_storage_bucket.iac_outputs.name}/objects/data-science/\"))"
+  }
+}
+
+resource "google_storage_bucket_iam_member" "iac_outputs_app_viewer" {
+  count = var.enable_ci_service_accounts && local.include_tf_app_ci ? 1 : 0
+
+  bucket = google_storage_bucket.iac_outputs.name
+  role   = "roles/storage.objectViewer"
+  member = google_service_account.ci["tf_app_ci"].member
+}
+
+resource "google_storage_bucket_iam_member" "iac_outputs_app_prefix_admin" {
+  count = var.enable_ci_service_accounts && local.include_tf_app_ci ? 1 : 0
+
+  bucket = google_storage_bucket.iac_outputs.name
+  role   = "roles/storage.objectAdmin"
+  member = google_service_account.ci["tf_app_ci"].member
+
+  condition {
+    title       = "tf_app_ci_outputs_prefix"
+    description = "Allow app factory CI to export outputs under apps/ prefix or per-env apps-enterprise-outputs.json."
+    expression  = "(resource.type == \"storage.googleapis.com/Bucket\" && (api.getAttribute(\"storage.googleapis.com/objectListPrefix\", \"\").startsWith(\"apps/\") || api.getAttribute(\"storage.googleapis.com/objectListPrefix\", \"\") == \"apps\")) || (resource.type == \"storage.googleapis.com/Object\" && (resource.name.startsWith(\"projects/_/buckets/${google_storage_bucket.iac_outputs.name}/objects/apps/\") || resource.name.endsWith(\"/apps-enterprise-outputs.json\")))"
+  }
+}
+
+resource "google_storage_bucket_iam_member" "iac_outputs_shared_viewer" {
+  for_each = local.shared_ops_iac_sas
+
+  bucket = google_storage_bucket.iac_outputs.name
+  role   = "roles/storage.objectViewer"
+  member = google_service_account.ci[each.key].member
+}
+
+resource "google_storage_bucket_iam_member" "iac_outputs_shared_prefix_admin" {
+  for_each = local.shared_ops_iac_sas
+
+  bucket = google_storage_bucket.iac_outputs.name
+  role   = "roles/storage.objectAdmin"
+  member = google_service_account.ci[each.key].member
+
+  condition {
+    title       = "${each.key}_outputs_shared_prefix"
+    description = "Allow ${each.key} to export outputs under shared/ prefix."
+    expression  = "(resource.type == \"storage.googleapis.com/Bucket\" && (api.getAttribute(\"storage.googleapis.com/objectListPrefix\", \"\").startsWith(\"shared/\") || api.getAttribute(\"storage.googleapis.com/objectListPrefix\", \"\") == \"shared\")) || (resource.type == \"storage.googleapis.com/Object\" && resource.name.startsWith(\"projects/_/buckets/${google_storage_bucket.iac_outputs.name}/objects/shared/\"))"
   }
 }
 

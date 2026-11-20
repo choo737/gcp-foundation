@@ -31,11 +31,33 @@ gh repo create acme-corp/gcp-foundation --private --template choo737/gcp-foundat
 
 ## Architecture & Capabilities
 
+### Folder Topology
+
+Deployed Google Cloud Resource Manager folder, project, and team ownership tree:
+
+```text
+<prefix>-<suffix>-gcp-foundation [Folder] (CloudOps Admins / Security Admins)
+├── 01-shared-infrastructure [Folder] (CloudOps Admins)
+│   ├── <prefix>-<suffix>-audit [Project] (CloudOps Admins / Security Admins)
+│   ├── <prefix>-<suffix>-cmn-secops [Project] (SecOps Analysts)
+│   ├── <prefix>-<suffix>-cmn-finops [Project] (FinOps Admins)
+│   └── <prefix>-<suffix>-cmn-backup [Project] (CloudOps Admins)
+└── 02-environments [Folder]
+    └── {dev, uat, staging, prod} [Folder]
+        ├── network [Folder] -> <prefix>-<suffix>-network [Project] (Network Admins)
+        ├── data-platform [Folder] -> storage & compute [Folders] (Data Teams)
+        ├── ai [Folder] -> ds-exp & ml-ops [Projects] (AI Teams)
+        └── app [Folder] -> <app> [Folder] -> <prefix>-<suffix>-app-<key> [Project] (App Teams)
+```
+
+With company acronym `sfg` and `auto_unique_suffix = true`, Terraform creates `sfg-8a3f-cmn-finops` and `sfg-9c1d-app-orders`.
+
 ```mermaid
 flowchart LR
     S0["foundation/00-bootstrap"] --> S1["foundation/01-org-governance"]
     S1 --> S2["foundation/02-security-network"]
     S2 --> D1["data/enterprise/01-platform"]
+    S2 --> A1["apps/enterprise"]
     D1 --> D3["data/enterprise/03-data-science"]
     D1 --> D2["data/enterprise/02-governance-ops"]
     D3 -. "optional XAI dataset" .-> D2
@@ -50,9 +72,9 @@ flowchart LR
 | Path 3: Sandbox | One existing GCP project | `data/sandbox` |
 
 - **Bootstrap & WIF**: Provisions hardened `tfstate` and `iac-outputs` buckets with soft delete plus keyless GitHub Actions WIF.
-- **Org Governance & SecOps**: Deploys `02-environments`, locked logs, Stage-01 CMEK, FinOps, Backup & DR, 38 Org Policies, and SCC.
-- **Security & Network**: Configures HSM CMEK, Shared VPC, Cloud NGFW folder/VPC policies, `GCE_FIREWALL` secure tags, PSC, and VPC-SC.
-- **Enterprise Data Platform**: Separates governance, storage, compute, and optional Data Science (`03-data-science`) with XAI audit ledgers.
+- **Org Governance & SecOps**: Deploys `02-environments`, locked logs, `cmn-secops`, Stage-01 CMEK, FinOps, Backup & DR, 38 Org Policies, and SCC.
+- **Security & Network**: Configures HSM CMEK, Shared VPC, `data`/`ai`/`app` subnets, Cloud NGFW, `GCE_FIREWALL` tags, PSC, and VPC-SC.
+- **Enterprise Data & Apps**: Separates governance, storage, compute, AI (`03-data-science`), and isolated app projects (`apps/enterprise`).
 
 ## 6-Step Enterprise Operationalization
 
@@ -111,7 +133,9 @@ Create a private template repo first, link stages with scripts/link-stages.sh, a
 - `assets/`: Cloud City Layer 01 visual architecture animations.
 - `modules/foundation/`: Reusable five-file modules (`folder-hierarchy`, `project-factory`, `logging-guardrails`, `finops-governance`, `backup-dr`, `network-security`, `github-wif`, `monitoring-alerts`, `scc-secops`).
 - `modules/data/`: Reusable five-file modules (`governance-catalog`, `bigquery-dataset`, `bigquery-reservations`, `dataplex-scans`, `dataform-repository`, `ml-governance`).
+- `modules/app/`: Reusable five-file application factory module (`workload-factory`).
 - `foundation/`: Runnable stages `00-bootstrap`, `01-org-governance`, and `02-security-network` with `envs/` templates.
+- `apps/enterprise/`: Per-environment application team project factory with `envs/` templates.
 - `data/sandbox/`: Single-project Medallion deployment root for rapid validation.
 - `data/enterprise/`: Three-stage enterprise data platform (`01-platform`, `02-governance-ops`, and optional `03-data-science`) with `envs/` templates.
 - `scripts/`: `link-stages.sh` for stage linking plus `configure-bq-dr-replica.sh` and `verify-scc-detectors.sh` for Day-2 ops.
@@ -134,6 +158,7 @@ make test
 - [Tier-2 Foundation and Data Platform Questionnaire](QUESTIONNAIRE.md)
 - [Architecture Overview](docs/01-architecture.md)
 - [Entry Points Guide](docs/02-entry-points.md)
+- [Security Foundations Blueprint](docs/03-security-foundations-blueprint.md)
 - [Multi-Environment Rollout and Decommissioning](docs/04-multi-env-and-decommission.md)
 - [Enterprise Operationalization Guide](docs/05-enterprise-operationalization-guide.md)
 

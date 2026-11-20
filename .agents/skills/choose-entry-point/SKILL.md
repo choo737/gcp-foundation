@@ -9,9 +9,10 @@ Pick the lowest-friction stage path that matches the user's GCP permissions and 
 
 ## Decision Table
 
-1. Use `data/sandbox/` when the user only has one project and wants fast validation.
-2. Use `foundation/01-org-governance` -> `foundation/02-security-network` -> `data/enterprise/` when building from an organization or top folder.
-3. Start at `data/enterprise/01-platform` when an existing landing zone already provides `data_folder_id`.
+1. Use `foundation/00-bootstrap` (`Path 0`) first when CI/CD requires GCS `tfstate` and GitHub OIDC WIF.
+2. Use `foundation/01-org-governance` -> `foundation/02-security-network` -> `data/enterprise/01-platform` -> optional `03-data-science` -> `02-governance-ops` -> optional `apps/enterprise` (`Path 1`) for greenfield orgs.
+3. Start at `data/enterprise/01-platform` (`Path 2`) when an existing landing zone provides `data_folder_id`.
+4. Use `data/sandbox/` (`Path 3`) when the user has one GCP project for fast validation.
 
 ## Checklist
 

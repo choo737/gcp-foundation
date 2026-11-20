@@ -48,22 +48,33 @@ Never guess organization IDs, billing accounts, project IDs, or IAM principals.
 Confirm these decisions with the customer first:
 
 1. **Path 0 (Optional Bootstrap)**: `foundation/00-bootstrap` for GCS `tfstate`, `iac-outputs`, and GitHub WIF (`ci_repository_map`).
-2. **Path 1 (Greenfield End-to-End)**: `foundation/01-org-governance` -> `foundation/02-security-network` -> `data/enterprise/01-platform` -> `data/enterprise/02-governance-ops`.
-3. **Path 2 (Brownfield Data Platform)**: `data/enterprise/01-platform` -> `data/enterprise/02-governance-ops` under an existing folder.
+2. **Path 1 (Greenfield End-to-End)**: `01-org-governance` -> `02-security-network` -> `01-platform` -> `03-data-science` (optional) -> `02-governance-ops` -> `apps/enterprise` (optional).
+3. **Path 2 (Brownfield Folders)**: `data/enterprise/01-platform` -> `03-data-science` (optional) -> `data/enterprise/02-governance-ops` -> `apps/enterprise` (optional).
 4. **Path 3 (Single-Project Sandbox)**: `data/sandbox/` inside one existing GCP project.
 5. **Regulatory profile**: `sandbox_poc` (`retention_days = 30`), `enterprise_standard` (`1095`), or `regulated_fsi_rmit` (`2555`, HSM, DR).
-6. **SCC tier**: `NONE`, `STANDARD` (free regional BQ export + alerts), or `PREMIUM` (Custom SHA + Security Posture).
-7. **VPC-SC and networking**: `subnet_cidr`, `allowed_private_db_cidrs`, Datastream PSC, and `enforce_vpc_sc` (`false` dry-run vs `true` enforced).
-8. **FinOps, slots, and RBAC**: Monthly budget, `baseline_slots`/`max_slots`, `foundation_iam_groups`, and `bi_analysts_group`/`data_engineers_group`/`governance_stewards_group`.
+6. **SCC & SecOps**: `scc_tier` (`NONE`, `STANDARD`, `PREMIUM`), `create_dedicated_secops_project` (`cmn-secops`), and `enable_shared_artifact_registry`.
+7. **VPC-SC and networking**: `subnet_cidr`, `department_subnet_cidrs` (`data`, `ai`, `app`), `allowed_private_db_cidrs`, Datastream PSC, and `enforce_vpc_sc`.
+8. **FinOps, slots, and 7-team RBAC**: `department_budgets`, `baseline_slots`/`max_slots`, `foundation_iam_groups`, `network_admins_group`, `ai_admins_group`, `app_admins_group`, and `env_groups`.
+
+Propose the Company / Organization Acronym (`prefix`) before collecting variables:
+
+- Frame `prefix` as **Company / Organization Acronym (`3-6` lowercase chars, max `8`)**.
+- Ask for the organization name or read GCP Organization `displayName`.
+- Strip legal words (`Bhd`, `Berhad`, `Sdn`, `Pte`, `Ltd`, `Inc`, `Corp`).
+- Drop `Holdings` or `Group` only when three or more core words remain.
+- Propose a 3-6 lowercase character acronym, such as `egr` (`Example Global Retail Ltd`) or `sfg` (`Sample Financial Group Berhad`).
+- Confirm the acronym with the user, set `auto_unique_suffix = true`, and leave `project_suffix = ""`.
+- Terraform appends a deterministic 4-hex code so every `project_id` stays within 30 chars.
 
 Collect the required variables before creating `custom.auto.tfvars` or `envs/<env>.tfvars`:
 
-- **Path 0**: `project_id`, `region`, `prefix`, `project_suffix`, `enable_github_wif`, `github_org`, `github_repositories`, `ci_repository_map`.
-- **Path 1 (Core & Governance)**: `parent_id`, `billing_account`, `region`, `dr_region`, `prefix`, `project_suffix`, `environments`, `retention_days`, `lock_audit_bucket`, `enable_audit_project_lien`.
-- **Path 1 (Security & Data)**: `scc_tier`, `scc_alert_email_addresses`, `enable_org_policies`, `kms_protection_level`, `enforce_vpc_sc`, `monthly_budget_amount`, `enable_reservations`, `masked_readers`, `bi_analysts`.
-- **Path 2**: `data_folder_id`, `billing_account`, `region`, `prefix`, `project_suffix`, `environment`, optional `kms_key_id`, `shared_vpc_host_project_id`, `vpc_id`, `subnet_id`, `enable_reservations`, `masked_readers`, `bi_analysts`.
-- **Path 3**: `project_id`, `region`, `prefix`, `masked_readers`.
-- Keep `prefix` to 3-8 lowercase alphanumeric chars and set `project_suffix` (`dev01`, `stg01`, `prd01`).
+- **Path 0**: `project_id`, `region`, `prefix`, `auto_unique_suffix`, `enable_github_wif`, `github_org`, `github_repositories`, `ci_repository_map`.
+- **Path 1 (Core & Governance)**: `parent_id`, `billing_account`, `region`, `dr_region`, `prefix`, `auto_unique_suffix`.
+- **Path 1 (Org & Audit)**: `environments` (`["dev", "uat", "prod"]` or `["dev", "staging", "prod"]`), `retention_days`, `lock_audit_bucket`, `enable_audit_project_lien`.
+- **Path 1 (Security & Data)**: `scc_tier`, `create_dedicated_secops_project`, `enable_shared_artifact_registry`, `scc_alert_email_addresses`, `enable_org_policies`, `kms_protection_level`, `department_subnet_cidrs`, `enforce_vpc_sc`, `monthly_budget_amount`, `department_budgets`, `enable_reservations`, `masked_readers`, `bi_analysts`.
+- **Path 1 (Apps)**: `applications` (`display_name`, `enable_cloud_run`, `enable_gke`, `enable_cloud_sql`, `admin_group`, `developer_group`, `env_groups`) and `app_admins_group`.
+- **Path 2**: `data_folder_id`, `billing_account`, `region`, `prefix`, `auto_unique_suffix`, `environment`, optional `kms_key_id`, `shared_vpc_host_project_id`, `vpc_id`, `subnet_id`, `enable_reservations`, `masked_readers`, `bi_analysts`.
+- **Path 3**: `project_id`, `region`, `prefix`, `auto_unique_suffix`, `masked_readers`.
 - Offer optional `gcloud` lookup commands (`gcloud organizations list`, `gcloud billing accounts list`) only if asked.
 - If `enable_org_policies = true`, collect `allowed_policy_member_domains` and `allowed_contact_domains`.
 - Ask for `scc_tier` (`NONE`, `STANDARD` free, or `PREMIUM` paid; Enterprise retires May 21, 2027).
@@ -74,15 +85,18 @@ Ask whether this is a **production** or **ephemeral test** deployment:
 - **Production**: `deletion_protection = true`, `project_deletion_policy = "PREVENT"`, `delete_contents_on_destroy = false`.
 - **Ephemeral test**: `deletion_protection = false`, `project_deletion_policy = "DELETE"`, `delete_contents_on_destroy = true`.
 
-Map customer inputs to each stage's `custom.auto.tfvars` or `envs/<env>.tfvars`:
+Map customer inputs deterministically to each stage's `custom.auto.tfvars` or `envs/<env>.tfvars`:
 
-- `foundation/00-bootstrap/custom.auto.tfvars`: `project_id`, `region`, `prefix`, `project_suffix`, `enable_github_wif`, `github_org`, `github_repositories`, `ci_repository_map`, `allowed_refs`, `allowed_environments`, `force_destroy`.
-- `foundation/01-org-governance/custom.auto.tfvars`: `parent_id`, `billing_account`, `region`, `dr_region`, `prefix`, `project_suffix`, `environments`, `retention_days`, `enable_org_policies`, `allowed_policy_member_domains`, `allowed_contact_domains`, `lock_audit_bucket`, `enable_audit_project_lien`, `foundation_iam_groups`, `enable_billing_budget`, `monthly_budget_amount`, `budget_currency_code`, lifecycle flags.
+- `foundation/00-bootstrap/custom.auto.tfvars`: `project_id`, `region`, `prefix`, `auto_unique_suffix`, `enable_github_wif`, `github_org`, `github_repositories`, `ci_repository_map`, `allowed_refs`, `allowed_environments`, `force_destroy`.
+- `foundation/01-org-governance/custom.auto.tfvars` (Core & Org): `parent_id`, `billing_account`, `region`, `dr_region`, `prefix`, `auto_unique_suffix`, `environments`, `retention_days`, `enable_org_policies`, `allowed_policy_member_domains`, `allowed_contact_domains`, `lock_audit_bucket`, `enable_audit_project_lien`.
+- `foundation/01-org-governance/custom.auto.tfvars` (SecOps & FinOps): `create_dedicated_secops_project`, `enable_shared_artifact_registry`, `foundation_iam_groups`, `enable_billing_budget`, `monthly_budget_amount`, `department_budgets`, `finops_billing_export_table_name`, `budget_currency_code`, lifecycle flags.
 - `foundation/01-org-governance/custom.auto.tfvars` (SCC): `scc_tier`, `scc_location`, `scc_alert_email_addresses`, `enable_security_posture`, `organization_id`.
-- `foundation/02-security-network/envs/<env>.tfvars`: `environment`, `enable_cmek`, `kms_protection_level`, `enable_vpc`, `enable_shared_vpc_host`, `subnet_cidr`, `allowed_private_db_cidrs`, `enable_datastream_psc_attachment`, `enable_psc`, `enable_vpc_sc`, `enforce_vpc_sc`, `enable_alerts`, `project_deletion_policy`.
-- `data/enterprise/01-platform/envs/<env>.tfvars`: `environment`, `domain_marts`, `primary_domain`, `enable_dr_datasets`, `enable_reservations`, `baseline_slots`, `max_slots`, `enforce_vpc_sc`, `masked_readers`, `bi_analysts`, `bi_analysts_group`, `data_engineers_group`, `governance_stewards_group`, `break_glass_admins_group`.
+- `foundation/02-security-network/envs/<env>.tfvars`: `environment`, `auto_unique_suffix`, `enable_cmek`, `kms_protection_level`, `enable_vpc`, `enable_shared_vpc_host`, `subnet_cidr`, `department_subnet_cidrs`, `network_admins_group`, `security_admins_group`, `allowed_private_db_cidrs`, `enable_datastream_psc_attachment`, `enable_psc`, `enable_vpc_sc`, `enforce_vpc_sc`, `enable_alerts`, `project_deletion_policy`.
+- `data/enterprise/01-platform/envs/<env>.tfvars`: `environment`, `auto_unique_suffix`, `domain_marts`, `primary_domain`, `enable_dr_datasets`, `enable_reservations`, `baseline_slots`, `max_slots`, `enforce_vpc_sc`, `masked_readers`, `bi_analysts`, `bi_analysts_group`, `data_engineers_group`, `governance_stewards_group`, `break_glass_admins_group`, `env_groups`.
+- `data/enterprise/03-data-science/envs/<env>.tfvars`: `environment`, `auto_unique_suffix`, `enable_data_science`, `team_size_tier`, `compliance_profile`, `ai_admins_group`, `ds_analysts_group`, `env_groups`, `enable_ds_workbench`, `enable_colab_enterprise`, `xai_audit_retention_days`, `enforce_vpc_sc`.
 - `data/enterprise/02-governance-ops/envs/<env>.tfvars`: `environment`, `medallion_git_url`, `git_token_secret_version`, `enforce_vpc_sc`, `enable_scheduled_workflow`, `enable_quality_scan`, `delete_contents_on_destroy`.
-- `data/sandbox/custom.auto.tfvars`: `project_id`, `region`, `prefix`, `git_token_secret_version`, `masked_readers`, `delete_contents_on_destroy`.
+- `apps/enterprise/envs/<env>.tfvars`: `environment`, `auto_unique_suffix`, `applications`, `app_admins_group`, `enforce_vpc_sc`, `deletion_protection`, `project_deletion_policy`.
+- `data/sandbox/custom.auto.tfvars`: `project_id`, `region`, `prefix`, `auto_unique_suffix`, `git_token_secret_version`, `masked_readers`, `delete_contents_on_destroy`.
 
 ## Step 2: Verify Credentials, Git Secret, and Untracked Vars
 

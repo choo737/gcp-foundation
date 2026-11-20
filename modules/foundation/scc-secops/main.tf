@@ -27,6 +27,13 @@ locals {
     if contains(var.nonprod_mute_environments, env) && trimspace(fid) != ""
   } : {}
 
+  trimmed_secops_analysts = var.secops_analysts_group != null ? trimspace(var.secops_analysts_group) : ""
+  secops_analysts_member = local.trimmed_secops_analysts != "" ? (
+    startswith(local.trimmed_secops_analysts, "group:") || startswith(local.trimmed_secops_analysts, "user:") || startswith(local.trimmed_secops_analysts, "serviceAccount:")
+    ? local.trimmed_secops_analysts
+    : "group:${local.trimmed_secops_analysts}"
+  ) : ""
+
   alert_channel_ids = [
     for ch in google_monitoring_notification_channel.scc_email : ch.name
   ]
@@ -389,4 +396,20 @@ resource "google_securityposture_posture_deployment" "root_folder" {
   target_resource       = "folders/${local.numeric_folder_id}"
   posture_id            = google_securityposture_posture.foundation[0].name
   posture_revision_id   = google_securityposture_posture.foundation[0].revision_id
+}
+
+resource "google_project_iam_member" "secops_analysts_bq_viewer" {
+  count = local.secops_analysts_member != "" ? 1 : 0
+
+  project = var.audit_project_id
+  role    = "roles/bigquery.dataViewer"
+  member  = local.secops_analysts_member
+}
+
+resource "google_project_iam_member" "secops_analysts_bq_job_user" {
+  count = local.secops_analysts_member != "" ? 1 : 0
+
+  project = var.audit_project_id
+  role    = "roles/bigquery.jobUser"
+  member  = local.secops_analysts_member
 }

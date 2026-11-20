@@ -31,10 +31,16 @@ variable "project_suffix" {
   }
 }
 
+variable "auto_unique_suffix" {
+  type        = bool
+  default     = false
+  description = "When true and project_suffix is empty, appends a deterministic 4-hex code to bootstrap bucket names."
+}
+
 variable "foundation_sa_mode" {
   type        = string
   default     = "single"
-  description = "Foundation CI service account mode: single (tf_foundation_ci) or per_stage (org_gov_ci, net_sec_ci, data_plat_ci)."
+  description = "Foundation CI service account mode: single (tf_foundation_ci) or per_stage (org_gov_ci, net_sec_ci, data_plat_ci, tf_app_ci)."
 
   validation {
     condition     = contains(["single", "per_stage"], var.foundation_sa_mode)
@@ -85,21 +91,21 @@ variable "allowed_refs" {
 variable "allowed_environments" {
   type        = list(string)
   default     = []
-  description = "Optional GitHub Environments (shared, dev, staging, prod) enforced in WIF CEL."
+  description = "Optional GitHub Environments (shared, dev, uat, staging, prod) enforced in WIF CEL."
 }
 
 variable "ci_repository_map" {
   type        = map(list(string))
   default     = {}
-  description = "Per-service-account GitHub repository allowlists (keys: tf_foundation_ci, org_gov_ci, net_sec_ci, data_plat_ci, tf_ingestion_ci, dataform_ci, tf_ds_ci) preventing cross-repo impersonation."
+  description = "Per-service-account GitHub repository allowlists (keys: tf_foundation_ci, org_gov_ci, net_sec_ci, data_plat_ci, tf_ingestion_ci, dataform_ci, tf_ds_ci, tf_app_ci, secops_ci, finops_ci) preventing cross-repo impersonation."
 
   validation {
     condition = alltrue([
       for k, repos in var.ci_repository_map :
-      contains(["tf_foundation_ci", "org_gov_ci", "net_sec_ci", "data_plat_ci", "tf_ingestion_ci", "dataform_ci", "tf_ds_ci"], k) &&
+      contains(["tf_foundation_ci", "org_gov_ci", "net_sec_ci", "data_plat_ci", "tf_ingestion_ci", "dataform_ci", "tf_ds_ci", "tf_app_ci", "secops_ci", "finops_ci"], k) &&
       alltrue([for r in repos : can(regex("^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$", r))])
     ])
-    error_message = "ci_repository_map keys must be tf_foundation_ci, org_gov_ci, net_sec_ci, data_plat_ci, tf_ingestion_ci, dataform_ci, or tf_ds_ci, and values must match owner/repo."
+    error_message = "ci_repository_map keys must be tf_foundation_ci, org_gov_ci, net_sec_ci, data_plat_ci, tf_ingestion_ci, dataform_ci, tf_ds_ci, tf_app_ci, secops_ci, or finops_ci, and values must match owner/repo."
   }
 }
 

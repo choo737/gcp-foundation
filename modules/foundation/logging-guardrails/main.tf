@@ -26,17 +26,66 @@ locals {
     if trimspace(v) != ""
   }
 
-  folder_viewer_iam = {
-    for k, role in {
-      security_reviewer = "roles/iam.securityReviewer"
-      network_viewer    = "roles/compute.networkViewer"
-    } :
-    k => {
-      role   = role
-      member = local.normalized_iam_groups[k]
-    }
-    if contains(keys(local.normalized_iam_groups), k)
-  }
+  folder_viewer_iam = merge(
+    {
+      for k, role in {
+        security_reviewer = "roles/iam.securityReviewer"
+        network_viewer    = "roles/compute.networkViewer"
+      } :
+      k => {
+        role   = role
+        member = local.normalized_iam_groups[k]
+      }
+      if contains(keys(local.normalized_iam_groups), k)
+    },
+    contains(keys(local.normalized_iam_groups), "cloudops_admins") ? {
+      cloudops_folder_viewer = {
+        role   = "roles/resourcemanager.folderViewer"
+        member = local.normalized_iam_groups["cloudops_admins"]
+      }
+      cloudops_monitoring_viewer = {
+        role   = "roles/monitoring.viewer"
+        member = local.normalized_iam_groups["cloudops_admins"]
+      }
+    } : {},
+    contains(keys(local.normalized_iam_groups), "security_admins") ? {
+      security_admins_iam_reviewer = {
+        role   = "roles/iam.securityReviewer"
+        member = local.normalized_iam_groups["security_admins"]
+      }
+      security_admins_orgpolicy_viewer = {
+        role   = "roles/orgpolicy.policyViewer"
+        member = local.normalized_iam_groups["security_admins"]
+      }
+      security_admins_kms_viewer = {
+        role   = "roles/cloudkms.viewer"
+        member = local.normalized_iam_groups["security_admins"]
+      }
+    } : {},
+  )
+
+  audit_project_team_iam = merge(
+    contains(keys(local.normalized_iam_groups), "cloudops_admins") ? {
+      cloudops_log_viewer = {
+        role   = "roles/logging.privateLogViewer"
+        member = local.normalized_iam_groups["cloudops_admins"]
+      }
+      cloudops_bq_job_user = {
+        role   = "roles/bigquery.jobUser"
+        member = local.normalized_iam_groups["cloudops_admins"]
+      }
+      cloudops_bq_data_viewer = {
+        role   = "roles/bigquery.dataViewer"
+        member = local.normalized_iam_groups["cloudops_admins"]
+      }
+    } : {},
+    contains(keys(local.normalized_iam_groups), "secops_analysts") ? {
+      secops_log_viewer = {
+        role   = "roles/logging.privateLogViewer"
+        member = local.normalized_iam_groups["secops_analysts"]
+      }
+    } : {},
+  )
 }
 
 resource "google_logging_project_bucket_config" "audit" {
@@ -292,6 +341,14 @@ resource "google_project_iam_member" "audit_viewer" {
   project = var.audit_project_id
   role    = "roles/logging.privateLogViewer"
   member  = local.normalized_iam_groups["audit_viewer"]
+}
+
+resource "google_project_iam_member" "audit_team_iam" {
+  for_each = local.audit_project_team_iam
+
+  project = var.audit_project_id
+  role    = each.value.role
+  member  = each.value.member
 }
 
 resource "google_folder_iam_member" "foundation_viewers" {

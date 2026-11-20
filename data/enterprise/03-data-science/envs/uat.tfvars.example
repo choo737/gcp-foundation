@@ -1,0 +1,24 @@
+enable_data_science        = true
+team_size_tier             = "M"
+compliance_profile         = "enterprise_standard"
+environment                = "uat"
+region                     = "asia-southeast1"
+prefix                     = "ent"
+project_suffix             = "" # Leave empty when auto_unique_suffix = true
+auto_unique_suffix         = true
+billing_account            = "000000-000000-000000"
+compute_folder_id          = "folders/000000000000"
+governance_project_id      = "ent-uat01-data-gov"
+core_storage_project_id    = "ent-uat01-data-core"
+silver_dataset_id          = "ent_silver_curated"
+primary_gold_project_id    = "ent-uat01-data-fin"
+primary_gold_dataset_id    = "ent_gold_mart"
+pii_data_policy_short_id   = "ent_pii_mask"
+enable_ds_workbench        = true
+enable_colab_enterprise    = false
+xai_audit_retention_days   = 1095
+shap_additivity_tolerance  = 0.00001
+enable_xai_quality_scan    = true
+enforce_vpc_sc             = false
+project_deletion_policy    = "DELETE"
+delete_contents_on_destroy = false

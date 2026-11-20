@@ -1,0 +1,17 @@
+environment             = "prod"
+billing_account         = "000000-000000-000000"
+prefix                  = "ent"
+project_suffix          = "" # Leave empty when auto_unique_suffix = true
+auto_unique_suffix      = true
+region                  = "asia-southeast1"
+deletion_protection     = true
+project_deletion_policy = "PREVENT"
+enforce_vpc_sc          = true
+applications = {
+  web = {
+    display_name     = "Web Portal"
+    enable_cloud_run = true
+    enable_gke       = false
+    enable_cloud_sql = false
+  }
+}

@@ -38,6 +38,31 @@ output "subnet_id" {
   description = "Private subnetwork resource ID, or null."
 }
 
+output "department_subnet_ids" {
+  value       = module.network_security.department_subnet_ids
+  description = "Map of department keys (data, ai, app) to dedicated subnetwork resource IDs."
+}
+
+output "department_subnet_secondary_range_names" {
+  value       = module.network_security.department_subnet_secondary_range_names
+  description = "Map of department keys to GKE secondary IP range names (pods and services)."
+}
+
+output "data_subnet_id" {
+  value       = module.network_security.data_subnet_id
+  description = "Data department subnetwork resource ID, falling back to subnet_id."
+}
+
+output "ai_subnet_id" {
+  value       = module.network_security.ai_subnet_id
+  description = "AI department subnetwork resource ID, falling back to subnet_id."
+}
+
+output "app_subnet_id" {
+  value       = module.network_security.app_subnet_id
+  description = "Application department subnetwork resource ID, falling back to subnet_id."
+}
+
 output "datastream_network_attachment_id" {
   value       = module.network_security.datastream_network_attachment_id
   description = "Datastream PSC network attachment ID, or empty string."
@@ -124,8 +149,13 @@ output "prefix" {
 }
 
 output "project_suffix" {
-  value       = var.project_suffix
-  description = "Project uniqueness suffix propagated downstream."
+  value       = local.effective_project_suffix
+  description = "Effective project uniqueness suffix propagated downstream."
+}
+
+output "auto_unique_suffix" {
+  value       = var.auto_unique_suffix
+  description = "Auto-unique suffix toggle propagated downstream."
 }
 
 output "project_deletion_policy" {

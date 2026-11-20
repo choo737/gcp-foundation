@@ -40,7 +40,7 @@ variable "workload_folders" {
 variable "environments" {
   type        = list(string)
   default     = ["dev", "staging", "prod"]
-  description = "Environment folder names created under 02-environments."
+  description = "Environment folder names created under 02-environments (for example [\"dev\", \"staging\", \"prod\"] or [\"dev\", \"uat\", \"prod\"])."
 
   validation {
     condition     = length(var.environments) > 0 && alltrue([for e in var.environments : can(regex("^[a-z0-9-]+$", e))])

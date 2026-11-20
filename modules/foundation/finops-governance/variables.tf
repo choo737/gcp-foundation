@@ -98,6 +98,47 @@ variable "workload_budgets" {
   }
 }
 
+variable "department_budgets" {
+  type        = map(number)
+  default     = {}
+  description = "Optional map of department cost_center keys (platform, shared, data, ai, app, security, network) to monthly budget amounts."
+
+  validation {
+    condition = alltrue([
+      for k, v in var.department_budgets :
+      contains(["platform", "shared", "data", "ai", "app", "security", "network"], k) && v > 0
+    ])
+    error_message = "department_budgets keys must be in [platform, shared, data, ai, app, security, network] and amounts must be greater than zero."
+  }
+}
+
+variable "department_budget_ancestors" {
+  type        = map(list(string))
+  default     = {}
+  description = "Optional map of cost_center keys to folder/organization ancestors or project numbers (folders/<id>, organizations/<id>, or projects/<number>) scoping department budgets."
+
+  validation {
+    condition = alltrue([
+      for k, items in var.department_budget_ancestors :
+      alltrue([for item in items : startswith(item, "projects/") || startswith(item, "folders/") || startswith(item, "organizations/")]) &&
+      !(anytrue([for item in items : startswith(item, "projects/")]) && anytrue([for item in items : startswith(item, "folders/") || startswith(item, "organizations/")]))
+    ])
+    error_message = "Every department_budget_ancestors entry must start with projects/, folders/, or organizations/, and cannot mix projects/ with folders/ or organizations/ under the same key."
+  }
+}
+
+variable "billing_export_table_name" {
+  type        = string
+  default     = ""
+  description = "Optional Cloud Billing BigQuery export table name enabling v_finops_department_spend."
+}
+
+variable "finops_admins_group" {
+  type        = string
+  default     = ""
+  description = "Optional FinOps admin Google Group granted billing costsManager and FinOps BigQuery access."
+}
+
 variable "budget_thresholds" {
   type        = list(number)
   default     = [0.5, 0.8, 0.9, 1.0]

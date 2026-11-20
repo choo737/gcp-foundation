@@ -629,7 +629,7 @@ class EnterpriseReadinessTest(unittest.TestCase):
         # Residual CI & doc fixes.
         deploy_wf = (REPO_ROOT / ".github/workflows/terraform-deploy.yml").read_text(encoding="utf-8")
         self.assertIn("- shared", deploy_wf)
-        self.assertEqual(deploy_wf.count("google-github-actions/setup-gcloud@"), 4)
+        self.assertEqual(deploy_wf.count("google-github-actions/setup-gcloud@"), 5)
         self.assertIn('BACKEND_PREFIX="foundation/01-org-governance/shared"', deploy_wf)
         self.assertIn("IAC_OUTPUTS_BUCKET", deploy_wf)
 
@@ -930,7 +930,7 @@ class EnterpriseReadinessTest(unittest.TestCase):
         self.assertIn("inputs.stage == 'data/enterprise/03-data-science'", deploy_wf)
         self.assertNotIn("GCP_DS_WIF_SA", deploy_wf)
         bootstrap_tfvars_ex = (REPO_ROOT / "foundation/00-bootstrap/terraform.tfvars.example").read_text(encoding="utf-8")
-        self.assertIn('allowed_environments = ["shared", "dev", "staging", "prod"]', bootstrap_tfvars_ex)
+        self.assertIn('allowed_environments = ["shared", "dev", "uat", "staging", "prod"]', bootstrap_tfvars_ex)
         self.assertNotIn("foundation-outputs.json\" \"${TARGET_STAGE}\" || true", deploy_wf)
         self.assertNotIn("--tfstate-bucket \"${TFSTATE_BUCKET}\" --export-gcs", deploy_wf)
         self.assertIn("shared/01-org-governance-outputs.json", deploy_wf)

@@ -160,6 +160,12 @@ variable "organization_id" {
   description = "Organization ID (organizations/<id> or <id>) required when enable_security_posture or enable_custom_etd_module is true."
 }
 
+variable "secops_analysts_group" {
+  type        = string
+  default     = ""
+  description = "Optional SecOps analysts Google Group granted BigQuery viewer and jobUser on the SCC findings project."
+}
+
 variable "labels" {
   type        = map(string)
   default     = {}

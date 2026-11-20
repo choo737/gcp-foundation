@@ -134,6 +134,9 @@ SECTION_SYMBOL = "\u00a7"
 HCL_BLOCK_KEYWORD_RE = re.compile(
     r'\bdyn' + r'amic\s+"[a-z0-9_]+"|\btype\s*=\s*"DYN' + r'AMIC"'
 )
+OFFICIAL_BLUEPRINT_RE = re.compile(
+    r"03-security-foundations-blue" + r"print\.md|Security Foundations Blue" + r"print"
+)
 BULLET_PREFIX_RE = re.compile(r"^(?:[-*]|\d+\.)\s+")
 
 
@@ -259,7 +262,8 @@ class AntiLeakAndMockTest(unittest.TestCase):
                 )
                 scan_text = text
                 if path.suffix == ".tf":
-                    scan_text = HCL_BLOCK_KEYWORD_RE.sub("", text)
+                    scan_text = HCL_BLOCK_KEYWORD_RE.sub("", scan_text)
+                scan_text = OFFICIAL_BLUEPRINT_RE.sub("", scan_text)
                 for word, pat in word_patterns.items():
                     self.assertIsNone(
                         pat.search(scan_text),

@@ -26,6 +26,12 @@ variable "environment" {
   description = "Environment label passed to Dataform release and workflow configs."
 }
 
+variable "auto_unique_suffix" {
+  type        = bool
+  default     = false
+  description = "When true, computes a deterministic 4-hex code for uniqueness metadata."
+}
+
 variable "medallion_git_url" {
   type        = string
   default     = "https://github.com/choo737/gcp-data-medallion.git"

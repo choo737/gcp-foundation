@@ -75,3 +75,27 @@ resource "google_folder" "env_compute" {
   parent              = google_folder.env_data_platform[each.key].name
   deletion_protection = var.deletion_protection
 }
+
+resource "google_folder" "env_ai" {
+  for_each = local.environment_set
+
+  display_name        = "ai"
+  parent              = google_folder.env[each.key].name
+  deletion_protection = var.deletion_protection
+}
+
+resource "google_folder" "env_app" {
+  for_each = local.environment_set
+
+  display_name        = "app"
+  parent              = google_folder.env[each.key].name
+  deletion_protection = var.deletion_protection
+}
+
+resource "google_folder" "env_network" {
+  for_each = local.environment_set
+
+  display_name        = "network"
+  parent              = google_folder.env[each.key].name
+  deletion_protection = var.deletion_protection
+}

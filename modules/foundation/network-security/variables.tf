@@ -72,6 +72,41 @@ variable "subnet_cidr" {
   description = "Primary CIDR range for the optional subnetwork."
 }
 
+variable "department_subnet_cidrs" {
+  type        = map(string)
+  default     = {}
+  description = "Optional isolated department subnet CIDRs keyed by data, ai, or app."
+
+  validation {
+    condition = alltrue([
+      for k, v in var.department_subnet_cidrs :
+      contains(["data", "ai", "app"], k) &&
+      can(regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$", v)) &&
+      can(cidrhost(v, 0))
+    ])
+    error_message = "department_subnet_cidrs keys must be in [data, ai, app] and values must be valid IPv4 CIDRs."
+  }
+}
+
+variable "department_subnet_secondary_ranges" {
+  type = map(object({
+    pods_cidr     = string
+    services_cidr = string
+  }))
+  default     = {}
+  description = "Optional GKE secondary IP ranges (pods_cidr and services_cidr) keyed by data, ai, or app."
+
+  validation {
+    condition = alltrue([
+      for k, v in var.department_subnet_secondary_ranges :
+      contains(["data", "ai", "app"], k) &&
+      can(cidrhost(v.pods_cidr, 0)) &&
+      can(cidrhost(v.services_cidr, 0))
+    ])
+    error_message = "department_subnet_secondary_ranges keys must be in [data, ai, app] with valid pods_cidr and services_cidr."
+  }
+}
+
 variable "enable_datastream_psc_attachment" {
   type        = bool
   default     = false
@@ -165,6 +200,12 @@ variable "vpc_sc_audit_project_number" {
   type        = string
   default     = ""
   description = "Optional audit project number allowed VPC-SC egress for logging and BigQuery."
+}
+
+variable "vpc_sc_secops_project_number" {
+  type        = string
+  default     = ""
+  description = "Optional SecOps project number allowed VPC-SC egress for shared Artifact Registry pulls."
 }
 
 variable "vpc_sc_access_level_members" {

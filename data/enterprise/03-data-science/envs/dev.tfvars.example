@@ -4,7 +4,8 @@ compliance_profile         = "sandbox_poc"
 environment                = "dev"
 region                     = "asia-southeast1"
 prefix                     = "ent"
-project_suffix             = "dev01"
+project_suffix             = "" # Leave empty when auto_unique_suffix = true
+auto_unique_suffix         = true
 billing_account            = "000000-000000-000000"
 etl_compute_project_id     = "ent-dev01-data-etl"
 governance_project_id      = "ent-dev01-data-gov"

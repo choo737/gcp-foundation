@@ -30,6 +30,12 @@ variable "project_suffix" {
   }
 }
 
+variable "auto_unique_suffix" {
+  type        = bool
+  default     = false
+  description = "When true and project_suffix is empty, appends a deterministic 4-hex code to project IDs."
+}
+
 variable "region" {
   type        = string
   default     = "asia-southeast1"
@@ -45,7 +51,7 @@ variable "dr_region" {
 variable "environments" {
   type        = list(string)
   default     = ["dev", "staging", "prod"]
-  description = "Environment folder names provisioned under 02-environments."
+  description = "Environment folder names provisioned under 02-environments (for example [\"dev\", \"uat\", \"staging\", \"prod\"])."
 }
 
 variable "deletion_protection" {
@@ -215,7 +221,19 @@ variable "essential_contacts" {
 variable "foundation_iam_groups" {
   type        = map(string)
   default     = {}
-  description = "Optional functional IAM groups (audit_viewer, security_reviewer, network_viewer, billing_viewer)."
+  description = "Optional functional IAM groups (audit_viewer, security_reviewer, network_viewer, billing_viewer, cloudops_admins, finops_admins, security_admins, secops_analysts)."
+}
+
+variable "create_dedicated_secops_project" {
+  type        = bool
+  default     = false
+  description = "Whether to provision a dedicated <prefix>-cmn-secops project for SCC findings instead of co-locating in the audit project."
+}
+
+variable "enable_shared_artifact_registry" {
+  type        = bool
+  default     = false
+  description = "Whether to provision a shared golden Docker Artifact Registry repository inside the audit project."
 }
 
 variable "enable_data_access_audit_logs" {
@@ -251,7 +269,7 @@ variable "finops_alert_email_addresses" {
 variable "environment_budgets" {
   type        = map(number)
   default     = {}
-  description = "Optional map of environment names (for example dev, staging, prod) to monthly budget amounts."
+  description = "Optional map of environment names (for example dev, uat, staging, prod) to monthly budget amounts."
 }
 
 variable "workload_budgets" {
@@ -263,6 +281,37 @@ variable "workload_budgets" {
   }))
   default     = {}
   description = "Optional map of workload-specific monthly budgets scoped by project numbers or labels."
+}
+
+variable "department_budgets" {
+  type        = map(number)
+  default     = {}
+  description = "Optional map of department cost_center keys (platform, shared, data, ai, app, security, network) to monthly budget amounts."
+
+  validation {
+    condition = alltrue([
+      for k, v in var.department_budgets :
+      contains(["platform", "shared", "data", "ai", "app", "security", "network"], k) && v > 0
+    ])
+    error_message = "department_budgets keys must be in [platform, shared, data, ai, app, security, network] and amounts must be greater than zero."
+  }
+}
+
+variable "finops_billing_export_table_name" {
+  type        = string
+  default     = ""
+  description = "Optional Cloud Billing BigQuery export table name enabling v_finops_department_spend."
+}
+
+variable "bootstrap_project_number" {
+  type        = string
+  default     = ""
+  description = "Optional numeric project number (or projects/<number>) of the bootstrap project scoped to the platform department budget."
+
+  validation {
+    condition     = var.bootstrap_project_number == "" || can(regex("^(projects/)?[0-9]+$", trimspace(var.bootstrap_project_number)))
+    error_message = "bootstrap_project_number must be empty, digits, or projects/<digits>."
+  }
 }
 
 variable "budget_thresholds" {

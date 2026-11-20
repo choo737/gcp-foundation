@@ -7,7 +7,9 @@ provider "google-beta" {
 }
 
 locals {
-  project_prefix              = var.project_suffix != "" ? "${var.prefix}-${var.project_suffix}" : var.prefix
+  auto_code                   = substr(sha256("${var.billing_account}-${var.prefix}-${var.environment}"), 0, 4)
+  effective_project_suffix    = var.project_suffix != "" ? var.project_suffix : (var.auto_unique_suffix ? local.auto_code : "")
+  project_prefix              = local.effective_project_suffix != "" ? "${var.prefix}-${local.effective_project_suffix}" : var.prefix
   dataset_prefix              = replace(var.prefix, "-", "_")
   trimmed_data_folder_id      = var.data_folder_id != null ? trimspace(var.data_folder_id) : ""
   trimmed_storage_folder_id   = var.storage_folder_id != null ? trimspace(var.storage_folder_id) : ""
@@ -29,12 +31,17 @@ locals {
   effective_shared_vpc_host  = var.shared_vpc_host_project_id != null ? trimspace(var.shared_vpc_host_project_id) : ""
   effective_vpc_sc_perimeter = var.vpc_sc_perimeter_name != null ? trimspace(var.vpc_sc_perimeter_name) : ""
   trimmed_batch_loader_sa    = var.batch_loader_sa_email != null ? trimspace(var.batch_loader_sa_email) : ""
+  trimmed_shared_ar          = var.shared_artifact_registry_id != null ? trimspace(var.shared_artifact_registry_id) : ""
+  shared_ar_parts            = local.trimmed_shared_ar != "" ? split("/", local.trimmed_shared_ar) : []
+  has_shared_ar              = can(regex("^projects/[^/]+/locations/[^/]+/repositories/[^/]+$", local.trimmed_shared_ar))
   trimmed_dataform_sa        = var.dataform_sa_email != null ? trimspace(var.dataform_sa_email) : ""
   trimmed_bi_group           = var.bi_analysts_group != null ? trimspace(var.bi_analysts_group) : ""
   trimmed_de_group           = var.data_engineers_group != null ? trimspace(var.data_engineers_group) : ""
   trimmed_stewards_group     = var.governance_stewards_group != null ? trimspace(var.governance_stewards_group) : ""
   trimmed_break_glass_group  = var.break_glass_admins_group != null ? trimspace(var.break_glass_admins_group) : ""
+  trimmed_env_group          = trimspace(lookup(var.env_groups, var.environment, ""))
 
+  env_group_member         = local.trimmed_env_group != "" ? (startswith(local.trimmed_env_group, "group:") || startswith(local.trimmed_env_group, "user:") || startswith(local.trimmed_env_group, "serviceAccount:") ? local.trimmed_env_group : "group:${local.trimmed_env_group}") : ""
   bi_group_member          = local.trimmed_bi_group != "" ? (startswith(local.trimmed_bi_group, "group:") ? local.trimmed_bi_group : "group:${local.trimmed_bi_group}") : ""
   de_group_member          = local.trimmed_de_group != "" ? (startswith(local.trimmed_de_group, "group:") ? local.trimmed_de_group : "group:${local.trimmed_de_group}") : ""
   stewards_group_member    = local.trimmed_stewards_group != "" ? (startswith(local.trimmed_stewards_group, "group:") ? local.trimmed_stewards_group : "group:${local.trimmed_stewards_group}") : ""
@@ -79,7 +86,19 @@ locals {
     }
   }
 
-  finops_env_tag_key = var.environment == "prod" ? "environment.prod" : "environment.nonprod"
+  finops_env_tag_key = (
+    var.environment == "prod"
+    ? "environment.prod"
+    : (var.environment == "uat" && contains(keys(var.finops_tag_value_ids), "environment.uat") ? "environment.uat" : "environment.nonprod")
+  )
+  shared_ar_readers = local.has_shared_ar ? merge(
+    {
+      cloudrun_etl = google_project_service_identity.cloudrun_etl.member
+    },
+    local.batch_loader_member != "" ? {
+      batch_loader = local.batch_loader_member
+    } : {},
+  ) : {}
   project_tag_bindings = merge(
     contains(keys(var.finops_tag_value_ids), "cost_center.data") ? { cost_center = var.finops_tag_value_ids["cost_center.data"] } : {},
     contains(keys(var.finops_tag_value_ids), local.finops_env_tag_key) ? { environment = var.finops_tag_value_ids[local.finops_env_tag_key] } : {},
@@ -125,7 +144,7 @@ locals {
     { for k, m in module.data_domain : "domain_${k}" => m.project_id },
   )
 
-  env_labels           = merge(var.labels, { environment = var.environment })
+  env_labels           = merge(var.labels, { cost_center = "data", environment = var.environment })
   trimmed_dual_loc     = var.dual_region_location != null ? trimspace(var.dual_region_location) : ""
   clean_dual_locations = [for loc in var.dual_region_data_locations : lower(trimspace(loc)) if trimspace(loc) != ""]
   inferred_dual_region_location = (
@@ -657,6 +676,21 @@ resource "google_artifact_registry_repository_iam_member" "batch_loader_reader" 
   member     = local.batch_loader_member
 }
 
+resource "google_artifact_registry_repository_iam_member" "shared_golden_reader" {
+  for_each = local.shared_ar_readers
+
+  project    = local.shared_ar_parts[1]
+  location   = local.shared_ar_parts[3]
+  repository = local.shared_ar_parts[5]
+  role       = "roles/artifactregistry.reader"
+  member     = each.value
+
+  depends_on = [
+    time_sleep.compute_api_propagation,
+    google_project_service_identity.cloudrun_etl,
+  ]
+}
+
 module "core_datasets" {
   for_each = local.core_datasets
   source   = "../../../modules/data/bigquery-dataset"
@@ -873,6 +907,44 @@ resource "google_project_iam_member" "break_glass_iam" {
     time_sleep.storage_api_propagation,
     time_sleep.compute_api_propagation,
   ]
+}
+
+resource "google_project_iam_member" "env_group_bi_monitoring_viewer" {
+  count = local.env_group_member != "" ? 1 : 0
+
+  project = module.data_bi.project_id
+  role    = "roles/monitoring.viewer"
+  member  = local.env_group_member
+
+  depends_on = [time_sleep.compute_api_propagation]
+}
+
+resource "google_bigquery_dataset_iam_member" "env_group_gold_viewer" {
+  for_each = local.env_group_member != "" ? var.domain_marts : toset([])
+
+  project    = module.data_domain[each.key].project_id
+  dataset_id = module.domain_gold_mart[each.key].dataset_id
+  role       = "roles/bigquery.dataViewer"
+  member     = local.env_group_member
+}
+
+resource "google_project_iam_member" "env_group_nonprod_bq_job_user" {
+  count = local.env_group_member != "" && var.environment != "prod" ? 1 : 0
+
+  project = module.data_bi.project_id
+  role    = "roles/bigquery.jobUser"
+  member  = local.env_group_member
+
+  depends_on = [time_sleep.compute_api_propagation]
+}
+
+resource "google_bigquery_dataset_iam_member" "env_group_nonprod_core_viewer" {
+  for_each = local.env_group_member != "" && var.environment != "prod" ? local.core_datasets : {}
+
+  project    = module.data_core.project_id
+  dataset_id = module.core_datasets[each.key].dataset_id
+  role       = "roles/bigquery.dataViewer"
+  member     = local.env_group_member
 }
 
 resource "google_access_context_manager_service_perimeter_dry_run_resource" "data_projects" {

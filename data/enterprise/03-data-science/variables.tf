@@ -65,6 +65,12 @@ variable "project_suffix" {
   }
 }
 
+variable "auto_unique_suffix" {
+  type        = bool
+  default     = false
+  description = "When true and project_suffix is empty, appends a deterministic 4-hex code to project IDs."
+}
+
 variable "billing_account" {
   type        = string
   default     = ""
@@ -81,6 +87,18 @@ variable "environment_compute_folder_ids" {
   type        = map(string)
   default     = {}
   description = "Map of environment names to compute folder IDs from stage 01."
+}
+
+variable "ai_folder_id" {
+  type        = string
+  default     = ""
+  description = "Optional AI department folder ID overriding compute_folder_id."
+}
+
+variable "environment_ai_folder_ids" {
+  type        = map(string)
+  default     = {}
+  description = "Map of environment names to ai folder IDs from stage 01."
 }
 
 variable "etl_compute_project_id" {
@@ -203,10 +221,28 @@ variable "finops_tag_value_ids" {
   description = "Optional Resource Manager FinOps tag value IDs linked from stage 01."
 }
 
+variable "shared_artifact_registry_id" {
+  type        = string
+  default     = ""
+  description = "Optional shared golden Artifact Registry repository ID linked from stage 01."
+}
+
 variable "ds_analysts_group" {
   type        = string
   default     = ""
   description = "Optional Google Group email or member string for data science analysts."
+}
+
+variable "ai_admins_group" {
+  type        = string
+  default     = ""
+  description = "Optional Google Group email or member string granted AI platform and monitoring viewer on ds-exp and ml-ops."
+}
+
+variable "env_groups" {
+  type        = map(string)
+  default     = {}
+  description = "Optional map of environment names (dev, uat, staging, prod) to collaborator Google Groups."
 }
 
 variable "enable_ds_workbench" {

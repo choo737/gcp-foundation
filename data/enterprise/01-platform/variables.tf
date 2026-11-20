@@ -77,6 +77,12 @@ variable "project_suffix" {
   }
 }
 
+variable "auto_unique_suffix" {
+  type        = bool
+  default     = false
+  description = "When true and project_suffix is empty, appends a deterministic 4-hex code to project IDs."
+}
+
 variable "region" {
   type        = string
   default     = "asia-southeast1"
@@ -379,10 +385,22 @@ variable "break_glass_admins_group" {
   description = "Optional Google Group email or member string for break-glass emergency admins."
 }
 
+variable "env_groups" {
+  type        = map(string)
+  default     = {}
+  description = "Optional map of environment names (dev, uat, staging, prod) to collaborator Google Groups."
+}
+
 variable "batch_loader_sa_email" {
   type        = string
   default     = ""
   description = "Optional Cloud Run batch loader service account granted Artifact Registry reader and VPC-SC ingress."
+}
+
+variable "shared_artifact_registry_id" {
+  type        = string
+  default     = ""
+  description = "Optional shared golden Artifact Registry repository ID linked from stage 01."
 }
 
 variable "dataform_sa_email" {

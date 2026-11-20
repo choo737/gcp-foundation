@@ -13,8 +13,8 @@ Treat `platform-context.json` as local intake state only and never commit it to 
 | `adoption_mode` | Adoption path (`Path 0`..`Path 3`) | `greenfield` runs `Path 0`..`1`; `brownfield` inspects `existing_landing_zone` |
 | `compliance_profile` | Section 2 profile | `sandbox_poc`, `enterprise_standard`, or `regulated_fsi_rmit` |
 | `primary_region` / `dr_region` | `region` / `dr_region` | Primary `asia-southeast1` and optional DR `asia-southeast2` |
-| `environments` | Active `envs/<env>.tfvars` tiers | List such as `["dev", "staging", "prod"]` |
-| `prefix` / `project_suffix` | `prefix` / `project_suffix` | `3-8` char prefix plus suffix like `dev01` |
+| `environments` | Active `envs/<env>.tfvars` tiers | List such as `["dev", "staging", "prod"]` or `["dev", "uat", "prod"]` |
+| `prefix` / `project_suffix` | `prefix` / `project_suffix` / `auto_unique_suffix` | Company / Organization Acronym (`3-6` lowercase chars, max `8`) plus `auto_unique_suffix = true` |
 | `ci_identity_mode` | `foundation/00-bootstrap` WIF toggle | `github_oidc_wif` enables WIF with `github_owner` |
 | `finops.*` | Section 5 FinOps inputs | `create_dedicated_finops_project`, export location, budgets, thresholds |
 | `backup_dr.*` | Section 2 Backup and DR inputs | `enable_backup_dr`, retention days, vault lock, soft delete, `bq_dr_mode` |
@@ -23,16 +23,29 @@ Treat `platform-context.json` as local intake state only and never commit it to 
 
 Collect `parent_id`, `data_folder_id`, and `billing_account` directly because `platform-context.json` omits org and billing IDs.
 
-## 1. Adoption Entry Path (`Path 0`..`Path 3`)
+## 1. Adoption Entry Path (`Path 0`..`Path 3`) & Company Acronym
 
 Pick the lowest-friction entry point matching your permissions and existing landing zone.
 
-| Path | Scenario | Starting & Downstream Stages | Key Required Inputs |
+### Company / Organization Acronym (`prefix`) & Auto-Unique Suffix (`auto_unique_suffix`)
+
+- Frame `prefix` as a **Company / Organization Acronym (`3-6` lowercase chars, max `8`)**.
+- Ask for the organization name or read GCP Organization `displayName`.
+- Strip legal words (`Bhd`, `Berhad`, `Sdn`, `Pte`, `Ltd`, `Inc`, `Corp`).
+- Drop `Holdings` or `Group` only when three or more core words remain.
+- Take first letters (`3-6` lowercase chars), such as `egr` (`Example Global Retail Ltd`) or `sfg` (`Sample Financial Group Berhad`).
+- Confirm the acronym with the user before generating any `.tfvars` files.
+- Set `auto_unique_suffix = true` and leave `project_suffix = ""` in `.tfvars`.
+- Terraform automatically appends a deterministic 4-hex unique code to every `project_id`.
+
+### Deterministic Path-to-Stage Mapping
+
+| Path | Scenario | Exact Ordered Stage List | Key Required Inputs |
 | --- | --- | --- | --- |
-| `Path 0` | Greenfield bootstrap seed | `foundation/00-bootstrap` | `project_id`, `region`, `prefix`, `project_suffix`, `ci_repository_map` |
-| `Path 1` | Greenfield org or top folder | `foundation/01-org-governance` -> `foundation/02-security-network` -> `data/enterprise/01-platform` -> `data/enterprise/02-governance-ops` | `parent_id`, `billing_account`, `environments`, `scc_tier`, `enable_org_policies` |
-| `Path 2` | Brownfield data folder | `data/enterprise/01-platform` -> `data/enterprise/02-governance-ops` | `data_folder_id`, `billing_account`, optional `kms_key_id`, `shared_vpc_host_project_id`, `vpc_id`, `subnet_id` |
-| `Path 3` | Single-project sandbox | `data/sandbox` | `project_id`, `region`, `prefix`, `masked_readers` |
+| `Path 0` | Greenfield bootstrap seed | `foundation/00-bootstrap` | `project_id`, `region`, `prefix`, `auto_unique_suffix`, `ci_repository_map` |
+| `Path 1` | Greenfield org or top folder | `foundation/01-org-governance` -> `foundation/02-security-network` -> `data/enterprise/01-platform` -> `data/enterprise/03-data-science` (if AI enabled) -> `data/enterprise/02-governance-ops` -> `apps/enterprise` (if apps enabled) | `parent_id`, `billing_account`, `environments`, `scc_tier`, `enable_org_policies` |
+| `Path 2` | Brownfield folders | `data/enterprise/01-platform` -> `data/enterprise/03-data-science` (if AI enabled) -> `data/enterprise/02-governance-ops` -> `apps/enterprise` (if apps enabled) | `data_folder_id` or `app_folder_id`, `billing_account`, optional `kms_key_id`, `shared_vpc_host_project_id`, `vpc_id`, `subnet_id` |
+| `Path 3` | Single-project sandbox | `data/sandbox` | `project_id`, `region`, `prefix`, `auto_unique_suffix`, `masked_readers` |
 
 - Confirm `Path 0` first if CI/CD needs GCS state buckets and scoped GitHub Actions WIF.
 - In `Path 2`, reuse existing `storage_folder_id`, `compute_folder_id`, `kms_key_id`, or Shared VPC IDs when present.
@@ -53,6 +66,8 @@ BNM RMiT and regulated FSI workloads require seven-year audit retention, HSM key
 | `enable_org_policies` | `foundation/01-org-governance` | `false` | `true` | `true` |
 | `enable_data_access_audit_logs` | `foundation/01-org-governance` | `true` | `true` | `true` |
 | `create_dedicated_finops_project` | `foundation/01-org-governance` | `false` | `true` | `true` |
+| `create_dedicated_secops_project` | `foundation/01-org-governance` | `false` | `true` | `true` |
+| `enable_shared_artifact_registry` | `foundation/01-org-governance` | `false` | `false` (`true` for golden images) | `true` |
 | `enable_backup_dr` | `foundation/01-org-governance` | `false` | `false` (opt-in `true`) | `false` (opt-in `true`) |
 | `backup_enforced_retention_days` | `foundation/01-org-governance` | `14` | `14` | `30` |
 | `lock_backup_vault` | `foundation/01-org-governance` | `false` | `false` | `false` (`true` at prod cutover) |
@@ -97,7 +112,7 @@ Configure network isolation, Cloud NGFW layering, and VPC-SC across `foundation/
 
 | Control Area | Variables (`02-security-network`) | Linked Variables (`01-platform`) | Recommended Rollout |
 | --- | --- | --- | --- |
-| Shared VPC & Logs | `enable_vpc`, `enable_shared_vpc_host`, `subnet_cidr` (`"10.20.0.0/20"`), `enable_vpc_flow_logs`, `vpc_flow_logs_sampling`, `enable_dns_logging` | `shared_vpc_host_project_id`, `vpc_id`, `subnet_id` | `enable_shared_vpc_host = true` in enterprise envs |
+| Shared VPC & Logs | `enable_vpc`, `enable_shared_vpc_host`, `subnet_cidr`, `department_subnet_cidrs`, `enable_vpc_flow_logs`, `vpc_flow_logs_sampling`, `enable_dns_logging` | `shared_vpc_host_project_id`, `vpc_id`, `subnet_id` (via `data_subnet_id`/`ai_subnet_id`/`app_subnet_id`) | `enable_shared_vpc_host = true` in enterprise envs |
 | Private Google APIs | `enable_psc`, `psc_ip_address` (`"10.250.0.10"`) | Inherited via Shared VPC DNS | Enable with custom VPC |
 | Datastream & Private DBs | `enable_datastream_psc_attachment`, `datastream_nat_subnet_cidr`, `datastream_producer_accept_lists`, `allowed_private_db_cidrs` | `datastream_network_attachment_id` | Supply private DB CIDRs for TCP `5432`/`3306` |
 | Cloud NGFW Layering | `enable_hierarchical_firewall_policy`, `enable_ngfw_standard_rules`, `enable_secure_tags`, `allowed_egress_fqdns` | Applied across environment folders | Enable folder policy and threat intel deny in `prod` |
@@ -123,6 +138,8 @@ Size dedicated FinOps billing exports, multi-tier budgets, BigQuery reservations
 | `monthly_budget_amount` | `500` | Master monthly threshold in whole currency units | Alerts at 50%, 80%, 90%, 100%, and 100% forecast |
 | `environment_budgets` | `{}` | Map of env name to monthly budget amount | Scoped to `02-environments/<env>` folders |
 | `workload_budgets` | `{}` | Map of workload budgets by project or label | Supports custom per-workload `alert_emails` |
+| `department_budgets` | `{}` | Map of `cost_center` keys (`platform`, `shared`, `data`, `ai`, `app`, `security`, `network`) to amounts | Scoped to billing label `cost_center` |
+| `finops_billing_export_table_name` | `""` | Export table name for `v_finops_department_spend` | Set after Console Billing Export creates table |
 | `finops_alert_email_addresses` | `[]` | Up to 5 Monitoring email channels | Use group emails like `gcp-finops-alerts@<domain>` |
 | `budget_currency_code` | `"USD"` | ISO-4217 currency code | Match Cloud Billing account currency |
 | `budget_project_numbers` | `[]` | Optional numeric project filter list | Empty scopes the whole billing account |
@@ -140,15 +157,18 @@ All three pools (`etl`, `bi`, `adhoc`) use `reservation_edition` (`"ENTERPRISE"`
 | `dev` / `staging` | `true` (or `false` if no quota) | `0` / `100` | `etl_max_slots = 100`, `bi_max_slots = 100`, `adhoc_max_slots = 100` |
 | `prod` | `true` | `0` / `400` (`$0/mo` idle) | `etl` `0`/`400`, `bi` `0`/`400`, `adhoc` `0`/`200` |
 
-### RBAC Google Groups & Multi-Repo WIF Scoping
+### RBAC Google Groups & Multi-Repo WIF Scoping (7-Team Deterministic Matrix)
 
 | Scope | Stage Root | Variable Name | Expected Entries |
 | --- | --- | --- | --- |
-| Foundation Ops | `foundation/01-org-governance` | `foundation_iam_groups` | `audit_viewer`, `security_reviewer`, `network_viewer`, `billing_viewer` |
+| Foundation Ops (7-Team) | `foundation/01-org-governance` | `foundation_iam_groups` | `cloudops_admins`, `finops_admins`, `security_admins`, `secops_analysts`, plus legacy `audit_viewer`, `security_reviewer`, `network_viewer`, `billing_viewer` |
+| Network & KMS Ops | `foundation/02-security-network` | `network_admins_group`, `security_admins_group` | Google Groups for network/DNS admins and KMS viewers |
 | Essential Contacts | `foundation/01-org-governance` | `essential_contacts` | Security and legal contact emails and categories |
-| Data Platform Groups | `data/enterprise/01-platform` | `bi_analysts_group`, `data_engineers_group`, `governance_stewards_group`, `break_glass_admins_group` | Google Group emails for BI, ETL, governance, and break-glass |
+| Data Platform Groups | `data/enterprise/01-platform` | `bi_analysts_group`, `data_engineers_group`, `governance_stewards_group`, `break_glass_admins_group`, `env_groups` | Google Groups for BI, ETL, governance, break-glass, and per-env QA/SI collaborators |
+| AI & MLOps Groups | `data/enterprise/03-data-science` | `ai_admins_group`, `ds_analysts_group`, `env_groups` | Google Groups for AI platform viewers, DS experimentation, and per-env collaborators |
+| App Team Factory | `apps/enterprise` | `app_admins_group`, `applications` | `applications` map (`display_name`, `enable_cloud_run`, `enable_gke`, `enable_cloud_sql`, `admin_group`, `developer_group`, `env_groups`) |
 | PII Readers | `data/enterprise/01-platform`, `data/sandbox` | `masked_readers`, `fine_grained_readers`, `bi_analysts` | IAM members for masked vs unmasked BigQuery reads |
-| Multi-Repo CI WIF | `foundation/00-bootstrap` | `ci_repository_map` | Keys `tf_foundation_ci`, `tf_ingestion_ci`, `dataform_ci`, `tf_ds_ci` mapped to `owner/repo` lists |
+| Multi-Repo CI WIF | `foundation/00-bootstrap` | `ci_repository_map` | Keys `tf_foundation_ci`, `org_gov_ci`, `net_sec_ci`, `data_plat_ci`, `tf_ingestion_ci`, `dataform_ci`, `tf_ds_ci`, `tf_app_ci`, `secops_ci`, `finops_ci` mapped to `owner/repo` lists |
 
 - Set `ci_repository_map` in `foundation/00-bootstrap` to prevent cross-repo service account impersonation.
 - Restrict WIF tokens further with `github_org`, `github_repositories`, `allowed_refs`, and `allowed_environments`.
@@ -167,7 +187,17 @@ Configure optional experimentation and MLOps isolation, Workbench hardening, and
 | `xai_audit_retention_days` | `2555` | WORM GCS retention days (`<ml_ops>-xai-worm`) | Locked automatically in `prod` environments |
 | `shap_additivity_tolerance` | `0.00001` | Tolerance for SHAP logit additivity Dataplex DQ | Enforced on `ml_xai_audit_ledger` |
 
-## 7. Write Customer Variables and Link Stages
+## 7. Application Team Project Factory (`apps/enterprise`)
+
+Provision isolated Cloud Run, GKE, and Cloud SQL application projects under `02-environments/<env>/app`.
+
+| Variable | Default | Purpose | Notes |
+| --- | --- | --- | --- |
+| `applications` | `{}` | Map keyed by 2-6 char `app_key` | Sets `display_name`, `enable_cloud_run`, `enable_gke`, `enable_cloud_sql`, `admin_group`, `developer_group`, `env_groups` |
+| `app_admins_group` | `""` | Platform-wide app admins group | Read-only in `prod`; `run.admin`/`container.admin` in non-prod |
+| `shared_artifact_registry_id` | `""` | Golden Docker repository ID from stage 01 | Grants runtime agents `roles/artifactregistry.reader` |
+
+## 8. Write Customer Variables and Link Stages
 
 Write answers into gitignored `custom.auto.tfvars` or tracked `envs/<env>.tfvars` inside private customer repos. Keep `terraform.tfvars` and `*.auto.tfvars*` gitignored.
 
@@ -176,6 +206,7 @@ Write answers into gitignored `custom.auto.tfvars` or tracked `envs/<env>.tfvars
 ./scripts/link-stages.sh --env dev foundation/01-org-governance foundation/02-security-network data/enterprise/01-platform
 ./scripts/link-stages.sh --env dev data/enterprise/01-platform data/enterprise/02-governance-ops
 ./scripts/link-stages.sh --env dev foundation/01-org-governance foundation/02-security-network data/enterprise/01-platform data/enterprise/03-data-science
+./scripts/link-stages.sh --env dev foundation/01-org-governance foundation/02-security-network apps/enterprise
 ```
 
 - Follow [docs/04-multi-env-and-decommission.md](docs/04-multi-env-and-decommission.md) before promoting to `prod` or tearing down protected stages.

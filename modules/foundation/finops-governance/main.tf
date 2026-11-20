@@ -32,19 +32,46 @@ locals {
     }
   }
 
+  trimmed_finops_admins = var.finops_admins_group != null ? trimspace(var.finops_admins_group) : ""
+  finops_admins_member = local.trimmed_finops_admins != "" ? (
+    startswith(local.trimmed_finops_admins, "group:") || startswith(local.trimmed_finops_admins, "user:") || startswith(local.trimmed_finops_admins, "serviceAccount:")
+    ? local.trimmed_finops_admins
+    : "group:${local.trimmed_finops_admins}"
+  ) : ""
+  trimmed_billing_export_table = var.billing_export_table_name != null ? trimspace(var.billing_export_table_name) : ""
+
+  department_budget_scopes = {
+    for k, _ in var.department_budgets :
+    k => {
+      ancestors = [
+        for item in lookup(var.department_budget_ancestors, k, []) :
+        item if startswith(item, "folders/") || startswith(item, "organizations/")
+      ]
+      projects = [
+        for item in lookup(var.department_budget_ancestors, k, []) :
+        item if startswith(item, "projects/")
+      ]
+    }
+  }
+
   finops_tags = {
     cost_center = {
       description = "Chargeback cost center tag key."
       values = {
         platform = "Shared platform engineering workloads."
-        data     = "Data platform storage and compute workloads."
         shared   = "Shared networking, security, and audit services."
+        data     = "Data platform storage and compute workloads."
+        ai       = "AI experimentation and MLOps workloads."
+        app      = "Application team runtime workloads."
+        security = "Dedicated SecOps and Security Command Center workloads."
+        network  = "Shared VPC and network perimeter infrastructure."
       }
     }
     environment = {
       description = "Workload lifecycle environment tag key."
       values = {
         prod    = "Production workloads."
+        uat     = "User acceptance testing workloads."
         nonprod = "Staging and pre-production workloads."
         sandbox = "Ephemeral validation workloads."
       }
@@ -226,6 +253,8 @@ resource "google_billing_budget" "workload" {
     disable_default_iam_recipients   = var.disable_default_iam_recipients
   }
 
+  depends_on = []
+
   lifecycle {
     precondition {
       condition     = length(each.value.projects) > 0 || length(each.value.labels) > 0
@@ -234,6 +263,57 @@ resource "google_billing_budget" "workload" {
 
     precondition {
       condition     = length(each.value.channel_ids) <= 5
+      error_message = "Cloud Billing budgets support at most 5 monitoring_notification_channels."
+    }
+  }
+}
+
+resource "google_billing_budget" "department" {
+  for_each = var.enable_billing_budget ? var.department_budgets : {}
+
+  billing_account = var.billing_account
+  display_name    = "${var.prefix}-dept-${each.key}-monthly-budget"
+
+  budget_filter {
+    resource_ancestors     = length(local.department_budget_scopes[each.key].ancestors) > 0 ? toset(local.department_budget_scopes[each.key].ancestors) : null
+    projects               = length(local.department_budget_scopes[each.key].ancestors) == 0 && length(local.department_budget_scopes[each.key].projects) > 0 ? toset(local.department_budget_scopes[each.key].projects) : null
+    labels                 = length(local.department_budget_scopes[each.key].ancestors) == 0 && length(local.department_budget_scopes[each.key].projects) == 0 ? { cost_center = each.key } : null
+    credit_types_treatment = "INCLUDE_ALL_CREDITS"
+  }
+
+  amount {
+    specified_amount {
+      currency_code = var.budget_currency_code
+      units         = tostring(each.value)
+    }
+  }
+
+  dynamic "threshold_rules" {
+    for_each = var.budget_thresholds
+    content {
+      threshold_percent = threshold_rules.value
+      spend_basis       = "CURRENT_SPEND"
+    }
+  }
+
+  dynamic "threshold_rules" {
+    for_each = var.enable_forecasted_threshold ? [1.0] : []
+    content {
+      threshold_percent = threshold_rules.value
+      spend_basis       = "FORECASTED_SPEND"
+    }
+  }
+
+  all_updates_rule {
+    pubsub_topic                     = google_pubsub_topic.budget_alerts.id
+    schema_version                   = "1.0"
+    monitoring_notification_channels = length(local.master_channel_ids) > 0 ? slice(local.master_channel_ids, 0, min(length(local.master_channel_ids), 5)) : null
+    disable_default_iam_recipients   = var.disable_default_iam_recipients
+  }
+
+  lifecycle {
+    precondition {
+      condition     = length(local.master_channel_ids) <= 5
       error_message = "Cloud Billing budgets support at most 5 monitoring_notification_channels."
     }
   }
@@ -289,4 +369,63 @@ resource "google_tags_tag_value" "finops" {
   parent      = google_tags_tag_key.finops[each.value.key_name].id
   short_name  = each.value.short_name
   description = each.value.description
+}
+
+resource "google_bigquery_table" "department_spend_view" {
+  count = local.trimmed_billing_export_table != "" ? 1 : 0
+
+  project             = local.effective_project_id
+  dataset_id          = google_bigquery_dataset.billing_export.dataset_id
+  table_id            = "v_finops_department_spend"
+  description         = "Monthly net spend grouped by cost_center and environment labels."
+  deletion_protection = !var.delete_contents_on_destroy
+  labels              = var.labels
+
+  view {
+    query          = <<-SQL
+      SELECT
+        invoice.month AS invoice_month,
+        COALESCE(
+          (SELECT t.value FROM UNNEST(tags) AS t WHERE t.key = 'cost_center' OR ENDS_WITH(t.key, '/cost_center') LIMIT 1),
+          (SELECT l.value FROM UNNEST(labels) AS l WHERE l.key = 'cost_center' LIMIT 1),
+          (SELECT pl.value FROM UNNEST(project.labels) AS pl WHERE pl.key = 'cost_center' LIMIT 1),
+          'unallocated'
+        ) AS cost_center,
+        COALESCE(
+          (SELECT t.value FROM UNNEST(tags) AS t WHERE t.key = 'environment' OR ENDS_WITH(t.key, '/environment') LIMIT 1),
+          (SELECT l.value FROM UNNEST(labels) AS l WHERE l.key = 'environment' LIMIT 1),
+          (SELECT pl.value FROM UNNEST(project.labels) AS pl WHERE pl.key = 'environment' LIMIT 1),
+          'unallocated'
+        ) AS environment,
+        currency,
+        ROUND(SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) AS c), 0)), 2) AS net_cost
+      FROM `${local.effective_project_id}.${google_bigquery_dataset.billing_export.dataset_id}.${local.trimmed_billing_export_table}`
+      GROUP BY invoice_month, cost_center, environment, currency
+    SQL
+    use_legacy_sql = false
+  }
+}
+
+resource "google_billing_account_iam_member" "finops_admins_costs_manager" {
+  count = local.finops_admins_member != "" && var.billing_account != "" ? 1 : 0
+
+  billing_account_id = var.billing_account
+  role               = "roles/billing.costsManager"
+  member             = local.finops_admins_member
+}
+
+resource "google_project_iam_member" "finops_admins_bq_viewer" {
+  count = local.finops_admins_member != "" ? 1 : 0
+
+  project = local.effective_project_id
+  role    = "roles/bigquery.dataViewer"
+  member  = local.finops_admins_member
+}
+
+resource "google_project_iam_member" "finops_admins_bq_job_user" {
+  count = local.finops_admins_member != "" ? 1 : 0
+
+  project = local.effective_project_id
+  role    = "roles/bigquery.jobUser"
+  member  = local.finops_admins_member
 }

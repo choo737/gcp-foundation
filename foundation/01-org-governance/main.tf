@@ -1,10 +1,21 @@
 locals {
-  project_prefix             = var.project_suffix != "" ? "${var.prefix}-${var.project_suffix}" : var.prefix
+  auto_code                  = substr(sha256("${var.billing_account}-${var.prefix}-shared"), 0, 4)
+  effective_project_suffix   = var.project_suffix != "" ? var.project_suffix : (var.auto_unique_suffix ? local.auto_code : "")
+  project_prefix             = local.effective_project_suffix != "" ? "${var.prefix}-${local.effective_project_suffix}" : var.prefix
   audit_project_id           = "${local.project_prefix}-audit"
   finops_project_id          = "${local.project_prefix}-cmn-finops"
   backup_project_id          = "${local.project_prefix}-cmn-backup"
+  secops_project_id          = "${local.project_prefix}-cmn-secops"
   effective_finops_project   = var.create_dedicated_finops_project ? module.finops_project[0].project_id : module.audit_project.project_id
+  effective_secops_project   = var.create_dedicated_secops_project ? module.secops_project[0].project_id : module.audit_project.project_id
   effective_audit_kms_key_id = var.enable_audit_cmek ? google_kms_crypto_key.audit_cmek[0].id : ""
+
+  cloudops_admins_raw = trimspace(lookup(var.foundation_iam_groups, "cloudops_admins", ""))
+  cloudops_admins_member = local.cloudops_admins_raw != "" ? (
+    startswith(local.cloudops_admins_raw, "group:") || startswith(local.cloudops_admins_raw, "user:") || startswith(local.cloudops_admins_raw, "serviceAccount:")
+    ? local.cloudops_admins_raw
+    : "group:${local.cloudops_admins_raw}"
+  ) : ""
 
   trimmed_dr_region = var.dr_region != null ? trimspace(var.dr_region) : ""
   allowed_resource_locations = concat(
@@ -20,7 +31,8 @@ locals {
     ? local.trimmed_scc_loc
     : (local.trimmed_legacy_scc_loc != "" ? local.trimmed_legacy_scc_loc : "global")
   )
-  trimmed_org_id = var.organization_id != null ? trimspace(var.organization_id) : ""
+  trimmed_org_id                = var.organization_id != null ? trimspace(var.organization_id) : ""
+  trimmed_bootstrap_project_num = var.bootstrap_project_number != null ? trimspace(var.bootstrap_project_number) : ""
   effective_organization_id = (
     local.trimmed_org_id != ""
     ? local.trimmed_org_id
@@ -47,8 +59,8 @@ provider "google" {
 resource "terraform_data" "validate_project_id_lengths" {
   lifecycle {
     precondition {
-      condition     = length(local.finops_project_id) <= 30 && length(local.backup_project_id) <= 30
-      error_message = "Combined prefix and project_suffix must keep -cmn-finops and -cmn-backup project IDs within 30 characters."
+      condition     = length(local.finops_project_id) <= 30 && length(local.backup_project_id) <= 30 && length(local.secops_project_id) <= 30
+      error_message = "Combined prefix and project_suffix must keep -cmn-finops, -cmn-backup, and -cmn-secops project IDs within 30 characters."
     }
   }
 }
@@ -58,7 +70,7 @@ module "folder_hierarchy" {
 
   parent_id           = var.parent_id
   prefix              = var.prefix
-  folder_suffix       = var.project_suffix
+  folder_suffix       = local.effective_project_suffix
   create_root_folder  = true
   deletion_protection = var.deletion_protection
   workload_folders    = ["data-platform"]
@@ -73,7 +85,7 @@ module "audit_project" {
   folder_id       = module.folder_hierarchy.shared_infra_folder_id
   billing_account = var.billing_account
   deletion_policy = var.project_deletion_policy
-  labels          = var.labels
+  labels          = merge(var.labels, { cost_center = "shared", environment = "shared" })
 
   activate_apis = concat(
     [
@@ -87,6 +99,7 @@ module "audit_project" {
       "monitoring.googleapis.com",
     ],
     var.enable_audit_cmek ? ["cloudkms.googleapis.com"] : [],
+    !var.create_dedicated_secops_project && var.enable_shared_artifact_registry ? ["artifactregistry.googleapis.com"] : [],
     local.effective_scc_tier != "NONE" ? [
       "securitycenter.googleapis.com",
     ] : [],
@@ -137,7 +150,7 @@ resource "google_kms_crypto_key" "audit_cmek" {
   purpose                    = "ENCRYPT_DECRYPT"
   rotation_period            = "7776000s"
   destroy_scheduled_duration = "2592000s"
-  labels                     = var.labels
+  labels                     = merge(var.labels, { cost_center = "shared", environment = "shared" })
 
   version_template {
     algorithm        = "GOOGLE_SYMMETRIC_ENCRYPTION"
@@ -187,6 +200,27 @@ resource "google_kms_crypto_key_iam_member" "audit_pubsub_cmek" {
   depends_on = [google_project_service_identity.audit_pubsub]
 }
 
+resource "google_project_service_identity" "audit_artifactregistry" {
+  count    = !var.create_dedicated_secops_project && var.enable_audit_cmek && var.enable_shared_artifact_registry ? 1 : 0
+  provider = google-beta
+
+  project = module.audit_project.project_id
+  service = "artifactregistry.googleapis.com"
+
+  depends_on = [time_sleep.audit_api_propagation]
+}
+
+resource "google_kms_crypto_key_iam_member" "audit_ar_cmek" {
+  count    = !var.create_dedicated_secops_project && var.enable_audit_cmek && var.enable_shared_artifact_registry ? 1 : 0
+  provider = google.billing_quota
+
+  crypto_key_id = google_kms_crypto_key.audit_cmek[0].id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  member        = "serviceAccount:service-${module.audit_project.project_number}@gcp-sa-artifactregistry.iam.gserviceaccount.com"
+
+  depends_on = [google_project_service_identity.audit_artifactregistry]
+}
+
 resource "time_sleep" "audit_cmek_iam_propagation" {
   count = var.enable_audit_cmek ? 1 : 0
 
@@ -195,7 +229,39 @@ resource "time_sleep" "audit_cmek_iam_propagation" {
   depends_on = [
     google_kms_crypto_key_iam_member.audit_bq_cmek,
     google_kms_crypto_key_iam_member.audit_pubsub_cmek,
+    google_kms_crypto_key_iam_member.audit_ar_cmek,
   ]
+}
+
+resource "google_artifact_registry_repository" "golden_images" {
+  count    = var.enable_shared_artifact_registry ? 1 : 0
+  provider = google.billing_quota
+
+  project       = local.effective_secops_project
+  location      = var.region
+  repository_id = "${replace(var.prefix, "_", "-")}-golden-images"
+  description   = "Shared golden base container images for application and data workloads."
+  format        = "DOCKER"
+  kms_key_name  = local.effective_audit_kms_key_id != "" ? local.effective_audit_kms_key_id : null
+  labels        = merge(var.labels, { cost_center = var.create_dedicated_secops_project ? "security" : "shared", environment = "shared" })
+
+  depends_on = [
+    time_sleep.audit_api_propagation,
+    time_sleep.audit_cmek_iam_propagation,
+    time_sleep.secops_api_propagation,
+    time_sleep.secops_cmek_iam_propagation,
+  ]
+}
+
+resource "google_artifact_registry_repository_iam_member" "cloudops_golden_images_admin" {
+  count    = var.enable_shared_artifact_registry && local.cloudops_admins_member != "" ? 1 : 0
+  provider = google.billing_quota
+
+  project    = local.effective_secops_project
+  location   = var.region
+  repository = google_artifact_registry_repository.golden_images[0].name
+  role       = "roles/artifactregistry.repoAdmin"
+  member     = local.cloudops_admins_member
 }
 
 module "finops_project" {
@@ -207,7 +273,7 @@ module "finops_project" {
   folder_id       = module.folder_hierarchy.shared_infra_folder_id
   billing_account = var.billing_account
   deletion_policy = var.project_deletion_policy
-  labels          = var.labels
+  labels          = merge(var.labels, { cost_center = "shared", environment = "shared" })
 
   activate_apis = [
     "bigquery.googleapis.com",
@@ -252,7 +318,7 @@ module "backup_project" {
   folder_id       = module.folder_hierarchy.shared_infra_folder_id
   billing_account = var.billing_account
   deletion_policy = var.project_deletion_policy
-  labels          = var.labels
+  labels          = merge(var.labels, { cost_center = "shared", environment = "shared" })
 
   activate_apis = [
     "backupdr.googleapis.com",
@@ -353,6 +419,133 @@ module "logging_guardrails" {
   ]
 }
 
+module "secops_project" {
+  count  = var.create_dedicated_secops_project ? 1 : 0
+  source = "../../modules/foundation/project-factory"
+
+  project_id      = local.secops_project_id
+  project_name    = trimsuffix(substr("${local.project_prefix} Common SecOps", 0, 30), " ")
+  folder_id       = module.folder_hierarchy.shared_infra_folder_id
+  billing_account = var.billing_account
+  deletion_policy = var.project_deletion_policy
+  labels          = merge(var.labels, { cost_center = "security", environment = "shared" })
+
+  activate_apis = concat(
+    [
+      "securitycenter.googleapis.com",
+      "bigquery.googleapis.com",
+      "pubsub.googleapis.com",
+      "monitoring.googleapis.com",
+      "logging.googleapis.com",
+    ],
+    var.enable_shared_artifact_registry ? ["artifactregistry.googleapis.com"] : [],
+    local.effective_scc_tier == "PREMIUM" ? concat(
+      ["securitycentermanagement.googleapis.com"],
+      var.enable_security_posture ? ["securityposture.googleapis.com"] : [],
+    ) : [],
+  )
+
+  depends_on = [terraform_data.validate_project_id_lengths]
+}
+
+resource "time_sleep" "secops_api_propagation" {
+  count = var.create_dedicated_secops_project ? 1 : 0
+
+  create_duration = var.propagation_wait_seconds
+
+  depends_on = [module.secops_project]
+}
+
+resource "google_resource_manager_lien" "secops_project" {
+  count    = var.create_dedicated_secops_project && var.enable_audit_project_lien ? 1 : 0
+  provider = google.billing_quota
+
+  parent       = "projects/${module.secops_project[0].project_number}"
+  restrictions = ["resourcemanager.projects.delete"]
+  origin       = "${var.prefix}-org-governance"
+  reason       = "Protected SecOps SCC findings and alerting project"
+
+  depends_on = [
+    time_sleep.audit_api_propagation,
+    time_sleep.secops_api_propagation,
+  ]
+}
+
+resource "google_project_service_identity" "secops_bq" {
+  count    = var.create_dedicated_secops_project && var.enable_audit_cmek ? 1 : 0
+  provider = google-beta
+
+  project = module.secops_project[0].project_id
+  service = "bigquery.googleapis.com"
+
+  depends_on = [time_sleep.secops_api_propagation]
+}
+
+resource "google_project_service_identity" "secops_pubsub" {
+  count    = var.create_dedicated_secops_project && var.enable_audit_cmek ? 1 : 0
+  provider = google-beta
+
+  project = module.secops_project[0].project_id
+  service = "pubsub.googleapis.com"
+
+  depends_on = [time_sleep.secops_api_propagation]
+}
+
+resource "google_kms_crypto_key_iam_member" "secops_bq_cmek" {
+  count    = var.create_dedicated_secops_project && var.enable_audit_cmek ? 1 : 0
+  provider = google.billing_quota
+
+  crypto_key_id = google_kms_crypto_key.audit_cmek[0].id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  member        = "serviceAccount:bq-${module.secops_project[0].project_number}@bigquery-encryption.iam.gserviceaccount.com"
+
+  depends_on = [google_project_service_identity.secops_bq]
+}
+
+resource "google_kms_crypto_key_iam_member" "secops_pubsub_cmek" {
+  count    = var.create_dedicated_secops_project && var.enable_audit_cmek ? 1 : 0
+  provider = google.billing_quota
+
+  crypto_key_id = google_kms_crypto_key.audit_cmek[0].id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  member        = "serviceAccount:service-${module.secops_project[0].project_number}@gcp-sa-pubsub.iam.gserviceaccount.com"
+
+  depends_on = [google_project_service_identity.secops_pubsub]
+}
+
+resource "google_project_service_identity" "secops_artifactregistry" {
+  count    = var.create_dedicated_secops_project && var.enable_audit_cmek && var.enable_shared_artifact_registry ? 1 : 0
+  provider = google-beta
+
+  project = module.secops_project[0].project_id
+  service = "artifactregistry.googleapis.com"
+
+  depends_on = [time_sleep.secops_api_propagation]
+}
+
+resource "google_kms_crypto_key_iam_member" "secops_ar_cmek" {
+  count    = var.create_dedicated_secops_project && var.enable_audit_cmek && var.enable_shared_artifact_registry ? 1 : 0
+  provider = google.billing_quota
+
+  crypto_key_id = google_kms_crypto_key.audit_cmek[0].id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  member        = "serviceAccount:service-${module.secops_project[0].project_number}@gcp-sa-artifactregistry.iam.gserviceaccount.com"
+
+  depends_on = [google_project_service_identity.secops_artifactregistry]
+}
+
+resource "time_sleep" "secops_cmek_iam_propagation" {
+  count = var.create_dedicated_secops_project && var.enable_audit_cmek ? 1 : 0
+
+  create_duration = var.propagation_wait_seconds
+
+  depends_on = [
+    google_kms_crypto_key_iam_member.secops_bq_cmek,
+    google_kms_crypto_key_iam_member.secops_pubsub_cmek,
+    google_kms_crypto_key_iam_member.secops_ar_cmek,
+  ]
+}
+
 module "finops_governance" {
   source = "../../modules/foundation/finops-governance"
 
@@ -360,25 +553,47 @@ module "finops_governance" {
     google = google.billing_quota
   }
 
-  audit_project_id               = module.audit_project.project_id
-  finops_project_id              = local.effective_finops_project
-  billing_account                = var.billing_account
-  prefix                         = var.prefix
-  region                         = var.region
-  billing_export_location        = var.finops_billing_export_location
-  enable_billing_budget          = var.enable_billing_budget
-  budget_project_numbers         = var.budget_project_numbers
-  monthly_budget_amount          = var.monthly_budget_amount
-  budget_currency_code           = var.budget_currency_code
-  alert_email_addresses          = var.finops_alert_email_addresses
-  environment_budgets            = var.environment_budgets
-  environment_folder_ids         = module.folder_hierarchy.environment_folder_ids
-  workload_budgets               = var.workload_budgets
+  audit_project_id          = module.audit_project.project_id
+  finops_project_id         = local.effective_finops_project
+  billing_account           = var.billing_account
+  prefix                    = var.prefix
+  region                    = var.region
+  billing_export_location   = var.finops_billing_export_location
+  billing_export_table_name = var.finops_billing_export_table_name
+  enable_billing_budget     = var.enable_billing_budget
+  budget_project_numbers    = var.budget_project_numbers
+  monthly_budget_amount     = var.monthly_budget_amount
+  budget_currency_code      = var.budget_currency_code
+  alert_email_addresses     = var.finops_alert_email_addresses
+  environment_budgets       = var.environment_budgets
+  environment_folder_ids    = module.folder_hierarchy.environment_folder_ids
+  workload_budgets          = var.workload_budgets
+  department_budgets        = var.department_budgets
+  department_budget_ancestors = merge(
+    {
+      data    = [for env in sort(keys(module.folder_hierarchy.environment_data_platform_folder_ids)) : module.folder_hierarchy.environment_data_platform_folder_ids[env]]
+      ai      = [for env in sort(keys(module.folder_hierarchy.environment_ai_folder_ids)) : module.folder_hierarchy.environment_ai_folder_ids[env]]
+      app     = [for env in sort(keys(module.folder_hierarchy.environment_app_folder_ids)) : module.folder_hierarchy.environment_app_folder_ids[env]]
+      network = [for env in sort(keys(module.folder_hierarchy.environment_network_folder_ids)) : module.folder_hierarchy.environment_network_folder_ids[env]]
+      shared = var.create_dedicated_secops_project ? compact([
+        "projects/${module.audit_project.project_number}",
+        var.create_dedicated_finops_project ? "projects/${module.finops_project[0].project_number}" : "",
+        var.enable_backup_dr ? "projects/${module.backup_project[0].project_number}" : "",
+      ]) : [module.folder_hierarchy.shared_infra_folder_id]
+    },
+    var.create_dedicated_secops_project ? {
+      security = ["projects/${module.secops_project[0].project_number}"]
+    } : {},
+    local.trimmed_bootstrap_project_num != "" ? {
+      platform = ["projects/${replace(local.trimmed_bootstrap_project_num, "projects/", "")}"]
+    } : {},
+  )
+  finops_admins_group            = lookup(var.foundation_iam_groups, "finops_admins", "")
   budget_thresholds              = var.budget_thresholds
   enable_forecasted_threshold    = var.enable_forecasted_threshold
   disable_default_iam_recipients = var.disable_default_iam_recipients
   delete_contents_on_destroy     = var.delete_contents_on_destroy
-  labels                         = var.labels
+  labels                         = merge(var.labels, { cost_center = "shared", environment = "shared" })
 
   depends_on = [
     time_sleep.audit_api_propagation,
@@ -402,6 +617,14 @@ resource "google_tags_tag_binding" "finops_project" {
   tag_value = module.finops_governance.finops_tag_value_ids[each.value]
 }
 
+resource "google_tags_tag_binding" "secops_project" {
+  for_each = var.create_dedicated_secops_project && var.enable_finops_tag_bindings ? toset(["cost_center.security", "environment.prod"]) : toset([])
+  provider = google.billing_quota
+
+  parent    = "//cloudresourcemanager.googleapis.com/projects/${module.secops_project[0].project_number}"
+  tag_value = module.finops_governance.finops_tag_value_ids[each.value]
+}
+
 module "scc_secops" {
   source = "../../modules/foundation/scc-secops"
 
@@ -415,7 +638,8 @@ module "scc_secops" {
   scc_location               = local.effective_scc_location
   folder_id                  = module.folder_hierarchy.root_folder_id
   environment_folder_ids     = module.folder_hierarchy.environment_folder_ids
-  audit_project_id           = module.audit_project.project_id
+  audit_project_id           = local.effective_secops_project
+  secops_analysts_group      = lookup(var.foundation_iam_groups, "secops_analysts", "")
   kms_key_id                 = local.effective_audit_kms_key_id
   prefix                     = var.prefix
   region                     = var.region
@@ -426,10 +650,12 @@ module "scc_secops" {
   custom_etd_config_json     = var.custom_etd_config_json
   enable_security_posture    = var.enable_security_posture
   organization_id            = local.effective_organization_id
-  labels                     = var.labels
+  labels                     = merge(var.labels, { cost_center = var.create_dedicated_secops_project ? "security" : "shared", environment = "shared" })
 
   depends_on = [
     time_sleep.audit_api_propagation,
     time_sleep.audit_cmek_iam_propagation,
+    time_sleep.secops_api_propagation,
+    time_sleep.secops_cmek_iam_propagation,
   ]
 }

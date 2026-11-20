@@ -1,0 +1,17 @@
+environment             = "staging"
+billing_account         = "000000-000000-000000"
+prefix                  = "ent"
+project_suffix          = "" # Leave empty when auto_unique_suffix = true
+auto_unique_suffix      = true
+region                  = "asia-southeast1"
+deletion_protection     = false
+project_deletion_policy = "DELETE"
+enforce_vpc_sc          = false
+applications = {
+  web = {
+    display_name     = "Web Portal"
+    enable_cloud_run = true
+    enable_gke       = false
+    enable_cloud_sql = false
+  }
+}

@@ -2,7 +2,8 @@ environment                = "prod"
 data_folder_id             = "folders/000000000000"
 billing_account            = "000000-000000-000000"
 prefix                     = "ent"
-project_suffix             = "prd01"
+project_suffix             = "" # Leave empty when auto_unique_suffix = true
+auto_unique_suffix         = true
 region                     = "asia-southeast1"
 kms_key_id                 = ""
 domain_marts               = ["fin"]

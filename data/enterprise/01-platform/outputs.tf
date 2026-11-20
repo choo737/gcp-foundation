@@ -210,6 +210,11 @@ output "prefix" {
   description = "Platform prefix propagated to stage 02."
 }
 
+output "project_suffix" {
+  value       = local.effective_project_suffix
+  description = "Effective project uniqueness suffix propagated downstream."
+}
+
 output "delete_contents_on_destroy" {
   value       = var.delete_contents_on_destroy
   description = "Destructive cleanup flag propagated to stage 02."

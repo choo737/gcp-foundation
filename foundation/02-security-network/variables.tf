@@ -16,6 +16,12 @@ variable "environment_folder_ids" {
   description = "Optional map of environment names to 02-environments/<env> folder IDs from stage 01."
 }
 
+variable "environment_network_folder_ids" {
+  type        = map(string)
+  default     = {}
+  description = "Optional map of environment names to 02-environments/<env>/network folder IDs from stage 01."
+}
+
 variable "environment" {
   type        = string
   default     = "dev"
@@ -52,6 +58,12 @@ variable "project_suffix" {
     condition     = var.project_suffix == "" || can(regex("^[a-z0-9]([a-z0-9-]{0,6}[a-z0-9])?$", var.project_suffix))
     error_message = "project_suffix must be empty or 1-8 lowercase alphanumeric characters."
   }
+}
+
+variable "auto_unique_suffix" {
+  type        = bool
+  default     = false
+  description = "When true and project_suffix is empty, appends a deterministic 4-hex code to project IDs."
 }
 
 variable "region" {
@@ -106,6 +118,53 @@ variable "subnet_cidr" {
   type        = string
   default     = "10.20.0.0/20"
   description = "Primary CIDR range for the optional private subnetwork."
+}
+
+variable "department_subnet_cidrs" {
+  type        = map(string)
+  default     = {}
+  description = "Optional isolated department subnet CIDRs keyed by data, ai, or app."
+
+  validation {
+    condition = alltrue([
+      for k, v in var.department_subnet_cidrs :
+      contains(["data", "ai", "app"], k) &&
+      can(regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$", v)) &&
+      can(cidrhost(v, 0))
+    ])
+    error_message = "department_subnet_cidrs keys must be in [data, ai, app] and values must be valid IPv4 CIDRs."
+  }
+}
+
+variable "department_subnet_secondary_ranges" {
+  type = map(object({
+    pods_cidr     = string
+    services_cidr = string
+  }))
+  default     = {}
+  description = "Optional GKE secondary IP ranges (pods_cidr and services_cidr) keyed by data, ai, or app."
+
+  validation {
+    condition = alltrue([
+      for k, v in var.department_subnet_secondary_ranges :
+      contains(["data", "ai", "app"], k) &&
+      can(cidrhost(v.pods_cidr, 0)) &&
+      can(cidrhost(v.services_cidr, 0))
+    ])
+    error_message = "department_subnet_secondary_ranges keys must be in [data, ai, app] with valid pods_cidr and services_cidr."
+  }
+}
+
+variable "network_admins_group" {
+  type        = string
+  default     = ""
+  description = "Optional Google Group granted compute.networkAdmin and dns.admin on the network project."
+}
+
+variable "security_admins_group" {
+  type        = string
+  default     = ""
+  description = "Optional Google Group granted cloudkms.viewer on the network project."
 }
 
 variable "enable_datastream_psc_attachment" {
@@ -202,6 +261,18 @@ variable "audit_project_number" {
   type        = string
   default     = ""
   description = "Linked audit project number from stage 01 used as VPC-SC audit egress fallback."
+}
+
+variable "vpc_sc_secops_project_number" {
+  type        = string
+  default     = ""
+  description = "Explicit SecOps project number allowed VPC-SC egress for shared Artifact Registry pulls."
+}
+
+variable "secops_project_number" {
+  type        = string
+  default     = ""
+  description = "Linked SecOps project number from stage 01 used as VPC-SC shared Artifact Registry egress fallback."
 }
 
 variable "vpc_sc_access_level_members" {

@@ -2,8 +2,24 @@ locals {
   clean_access_policy_id        = replace(var.access_policy_id, "accessPolicies/", "")
   effective_network_project_num = var.network_project_number != null ? trimspace(var.network_project_number) : ""
   effective_audit_project_num   = var.vpc_sc_audit_project_number != null ? trimspace(var.vpc_sc_audit_project_number) : ""
+  effective_secops_project_num  = var.vpc_sc_secops_project_number != null ? trimspace(var.vpc_sc_secops_project_number) : ""
   effective_dr_region           = var.dr_region != null ? trimspace(var.dr_region) : ""
-  create_dr_cmek                = var.enable_cmek && local.effective_dr_region != "" && local.effective_dr_region != var.region
+
+  sorted_department_keys = sort(keys(var.department_subnet_cidrs))
+  department_secondary_ranges = {
+    for idx, k in local.sorted_department_keys :
+    k => {
+      pods = {
+        range_name    = "${k}-pods"
+        ip_cidr_range = contains(keys(var.department_subnet_secondary_ranges), k) ? var.department_subnet_secondary_ranges[k].pods_cidr : cidrsubnet("100.64.0.0/12", 4, idx)
+      }
+      services = {
+        range_name    = "${k}-services"
+        ip_cidr_range = contains(keys(var.department_subnet_secondary_ranges), k) ? var.department_subnet_secondary_ranges[k].services_cidr : cidrsubnet("100.80.0.0/16", 4, idx)
+      }
+    }
+  }
+  create_dr_cmek = var.enable_cmek && local.effective_dr_region != "" && local.effective_dr_region != var.region
   normalized_cmek_service_agents = distinct([
     for raw_m in var.allowed_cmek_service_agents : (
       startswith(trimspace(raw_m), "serviceAccount:") || startswith(trimspace(raw_m), "group:") || startswith(trimspace(raw_m), "user:")
@@ -163,6 +179,37 @@ resource "google_compute_subnetwork" "this" {
   network                  = google_compute_network.this[0].id
   ip_cidr_range            = var.subnet_cidr
   private_ip_google_access = true
+
+  dynamic "log_config" {
+    for_each = var.enable_vpc_flow_logs ? [1] : []
+    content {
+      aggregation_interval = "INTERVAL_5_SEC"
+      flow_sampling        = var.vpc_flow_logs_sampling
+      metadata             = "INCLUDE_ALL_METADATA"
+    }
+  }
+}
+
+resource "google_compute_subnetwork" "department" {
+  for_each = var.enable_vpc ? var.department_subnet_cidrs : {}
+
+  project                  = var.project_id
+  name                     = "${var.prefix}-${var.environment}-${each.key}-snet"
+  region                   = var.region
+  network                  = google_compute_network.this[0].id
+  ip_cidr_range            = each.value
+  private_ip_google_access = true
+
+  dynamic "secondary_ip_range" {
+    for_each = [
+      local.department_secondary_ranges[each.key].pods,
+      local.department_secondary_ranges[each.key].services,
+    ]
+    content {
+      range_name    = secondary_ip_range.value.range_name
+      ip_cidr_range = secondary_ip_range.value.ip_cidr_range
+    }
+  }
 
   dynamic "log_config" {
     for_each = var.enable_vpc_flow_logs ? [1] : []
@@ -816,6 +863,43 @@ resource "google_access_context_manager_service_perimeter" "perimeter" {
                 method = "*"
               }
             }
+            operations {
+              service_name = "artifactregistry.googleapis.com"
+              method_selectors {
+                method = "*"
+              }
+            }
+          }
+        }
+      }
+
+      dynamic "egress_policies" {
+        for_each = local.effective_secops_project_num != "" && local.effective_secops_project_num != local.effective_audit_project_num ? [1] : []
+        content {
+          title = "${var.prefix}-${var.environment}-secops-golden-ar-egress"
+          egress_from {
+            identity_type = "ANY_IDENTITY"
+          }
+          egress_to {
+            resources = ["projects/${local.effective_secops_project_num}"]
+            operations {
+              service_name = "artifactregistry.googleapis.com"
+              method_selectors {
+                method = "*"
+              }
+            }
+            operations {
+              service_name = "logging.googleapis.com"
+              method_selectors {
+                method = "*"
+              }
+            }
+            operations {
+              service_name = "bigquery.googleapis.com"
+              method_selectors {
+                method = "*"
+              }
+            }
           }
         }
       }
@@ -862,6 +946,43 @@ resource "google_access_context_manager_service_perimeter" "perimeter" {
           }
           egress_to {
             resources = ["projects/${local.effective_audit_project_num}"]
+            operations {
+              service_name = "logging.googleapis.com"
+              method_selectors {
+                method = "*"
+              }
+            }
+            operations {
+              service_name = "bigquery.googleapis.com"
+              method_selectors {
+                method = "*"
+              }
+            }
+            operations {
+              service_name = "artifactregistry.googleapis.com"
+              method_selectors {
+                method = "*"
+              }
+            }
+          }
+        }
+      }
+
+      dynamic "egress_policies" {
+        for_each = local.effective_secops_project_num != "" && local.effective_secops_project_num != local.effective_audit_project_num ? [1] : []
+        content {
+          title = "${var.prefix}-${var.environment}-secops-golden-ar-egress"
+          egress_from {
+            identity_type = "ANY_IDENTITY"
+          }
+          egress_to {
+            resources = ["projects/${local.effective_secops_project_num}"]
+            operations {
+              service_name = "artifactregistry.googleapis.com"
+              method_selectors {
+                method = "*"
+              }
+            }
             operations {
               service_name = "logging.googleapis.com"
               method_selectors {

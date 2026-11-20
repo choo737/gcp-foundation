@@ -13,6 +13,8 @@ data "google_project" "current" {
 }
 
 locals {
+  auto_code              = substr(sha256("${var.project_id}-${var.prefix}-${var.environment}"), 0, 4)
+  effective_suffix       = var.auto_unique_suffix ? local.auto_code : ""
   dataset_prefix         = replace(var.prefix, "-", "_")
   effective_kms_key_name = var.kms_key_name != null ? trimspace(var.kms_key_name) : ""
   use_cmek               = local.effective_kms_key_name != ""

@@ -93,6 +93,11 @@ output "subnet_id" {
   description = "Private subnetwork resource ID propagated downstream."
 }
 
+output "ds_subnet_id" {
+  value       = var.subnet_id
+  description = "AI and Data Science subnetwork resource ID."
+}
+
 output "notification_channel_ids" {
   value       = var.notification_channel_ids
   description = "Cloud Monitoring notification channel IDs propagated downstream."
@@ -106,6 +111,11 @@ output "region" {
 output "prefix" {
   value       = var.prefix
   description = "Naming prefix propagated downstream."
+}
+
+output "project_suffix" {
+  value       = local.effective_project_suffix
+  description = "Effective project uniqueness suffix propagated downstream."
 }
 
 output "environment" {

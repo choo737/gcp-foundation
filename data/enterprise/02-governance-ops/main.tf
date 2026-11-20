@@ -147,7 +147,7 @@ locals {
     "serviceAccount:service-${data.google_project.gold.number}@gcp-sa-dataplex.iam.gserviceaccount.com",
   ]
 
-  env_labels = merge(var.labels, { environment = var.environment })
+  env_labels = merge(var.labels, { cost_center = "data", environment = var.environment })
 
   caller_email = trimspace(data.google_client_openid_userinfo.caller.email)
   caller_member = local.caller_email != "" ? (

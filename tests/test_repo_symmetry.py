@@ -29,10 +29,12 @@ MULTI_ENV_ROOTS = frozenset({
     "data/enterprise/01-platform",
     "data/enterprise/02-governance-ops",
     "data/enterprise/03-data-science",
+    "apps/enterprise",
 })
 
 EXPECTED_ENV_FILES = frozenset({
     "dev.tfvars.example",
+    "uat.tfvars.example",
     "staging.tfvars.example",
     "prod.tfvars.example",
 })
@@ -44,6 +46,7 @@ POST_BOOTSTRAP_ROOTS = frozenset({
     "data/enterprise/01-platform",
     "data/enterprise/02-governance-ops",
     "data/enterprise/03-data-science",
+    "apps/enterprise",
 })
 
 EXPECTED_MODULES = frozenset({
@@ -62,6 +65,7 @@ EXPECTED_MODULES = frozenset({
     "modules/data/dataplex-scans",
     "modules/data/dataform-repository",
     "modules/data/ml-governance",
+    "modules/app/workload-factory",
 })
 
 EXPECTED_ROOTS = frozenset({
@@ -72,6 +76,7 @@ EXPECTED_ROOTS = frozenset({
     "data/enterprise/01-platform",
     "data/enterprise/02-governance-ops",
     "data/enterprise/03-data-science",
+    "apps/enterprise",
 })
 
 IGNORED_NAMES = frozenset({
@@ -131,6 +136,12 @@ def _discover_runnable_roots() -> list[Path]:
     enterprise_dir = REPO_ROOT / "data" / "enterprise"
     if enterprise_dir.is_dir():
         for stage_dir in sorted(enterprise_dir.iterdir()):
+            if stage_dir.is_dir() and not stage_dir.name.startswith("."):
+                roots.append(stage_dir)
+
+    apps_dir = REPO_ROOT / "apps"
+    if apps_dir.is_dir():
+        for stage_dir in sorted(apps_dir.iterdir()):
             if stage_dir.is_dir() and not stage_dir.name.startswith("."):
                 roots.append(stage_dir)
 

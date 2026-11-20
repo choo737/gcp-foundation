@@ -98,14 +98,14 @@ variable "essential_contacts" {
 variable "foundation_iam_groups" {
   type        = map(string)
   default     = {}
-  description = "Optional functional IAM groups (audit_viewer, security_reviewer, network_viewer, billing_viewer)."
+  description = "Optional functional IAM groups (audit_viewer, security_reviewer, network_viewer, billing_viewer, cloudops_admins, finops_admins, security_admins, secops_analysts)."
 
   validation {
     condition = alltrue([
       for k in keys(var.foundation_iam_groups) :
-      contains(["audit_viewer", "security_reviewer", "network_viewer", "billing_viewer"], k)
+      contains(["audit_viewer", "security_reviewer", "network_viewer", "billing_viewer", "cloudops_admins", "finops_admins", "security_admins", "secops_analysts"], k)
     ])
-    error_message = "foundation_iam_groups keys must be audit_viewer, security_reviewer, network_viewer, or billing_viewer."
+    error_message = "foundation_iam_groups keys must be audit_viewer, security_reviewer, network_viewer, billing_viewer, cloudops_admins, finops_admins, security_admins, or secops_analysts."
   }
 }
 

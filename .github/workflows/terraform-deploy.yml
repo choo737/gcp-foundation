@@ -17,6 +17,7 @@ on:
         options:
           - shared
           - dev
+          - uat
           - staging
           - prod
       stage:
@@ -31,6 +32,7 @@ on:
           - data/enterprise/01-platform
           - data/enterprise/03-data-science
           - data/enterprise/02-governance-ops
+          - apps/enterprise
       enable_ds_stage:
         description: Merge optional 03-data-science outputs into foundation-outputs.json
         required: false
@@ -133,6 +135,7 @@ jobs:
         vars.GCP_TF_SA_EMAIL != '' ||
         (inputs.stage == 'foundation/01-org-governance' && vars.GCP_ORG_GOV_WIF_SA != '') ||
         (inputs.stage == 'foundation/02-security-network' && vars.GCP_NET_SEC_WIF_SA != '') ||
+        (inputs.stage == 'apps/enterprise' && vars.GCP_APP_WIF_SA != '') ||
         ((inputs.stage == 'data/sandbox' || inputs.stage == 'data/enterprise/01-platform' || inputs.stage == 'data/enterprise/02-governance-ops' || inputs.stage == 'data/enterprise/03-data-science' || inputs.stage == '') && vars.GCP_DATA_PLAT_WIF_SA != '')
       ) &&
       vars.GCP_TFSTATE_BUCKET != '' &&
@@ -153,7 +156,7 @@ jobs:
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ (inputs.stage == 'foundation/01-org-governance' && vars.GCP_ORG_GOV_WIF_SA) || (inputs.stage == 'foundation/02-security-network' && vars.GCP_NET_SEC_WIF_SA) || ((inputs.stage == 'data/sandbox' || inputs.stage == 'data/enterprise/01-platform' || inputs.stage == 'data/enterprise/02-governance-ops' || inputs.stage == 'data/enterprise/03-data-science' || inputs.stage == '') && vars.GCP_DATA_PLAT_WIF_SA) || vars.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_TF_SA_EMAIL }}
+          service_account: ${{ (inputs.stage == 'foundation/01-org-governance' && vars.GCP_ORG_GOV_WIF_SA) || (inputs.stage == 'foundation/02-security-network' && vars.GCP_NET_SEC_WIF_SA) || (inputs.stage == 'apps/enterprise' && vars.GCP_APP_WIF_SA) || ((inputs.stage == 'data/sandbox' || inputs.stage == 'data/enterprise/01-platform' || inputs.stage == 'data/enterprise/02-governance-ops' || inputs.stage == 'data/enterprise/03-data-science' || inputs.stage == '') && vars.GCP_DATA_PLAT_WIF_SA) || vars.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_TF_SA_EMAIL }}
 
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
@@ -172,7 +175,7 @@ jobs:
           IAC_OUTPUTS_BUCKET: ${{ vars.IAC_OUTPUTS_BUCKET }}
         run: |
           case "${TARGET_STAGE}" in
-            foundation/01-org-governance|foundation/02-security-network|data/sandbox|data/enterprise/01-platform|data/enterprise/02-governance-ops|data/enterprise/03-data-science) ;;
+            foundation/01-org-governance|foundation/02-security-network|data/sandbox|data/enterprise/01-platform|data/enterprise/02-governance-ops|data/enterprise/03-data-science|apps/enterprise) ;;
             *) echo "Disallowed stage: ${TARGET_STAGE}" >&2; exit 1 ;;
           esac
           if [[ ! "${TFSTATE_BUCKET}" =~ ^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$ ]]; then
@@ -193,7 +196,7 @@ jobs:
               foundation/02-security-network)
                 ./scripts/link-stages.sh --env dev --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "${TARGET_STAGE}"
                 ;;
-              data/enterprise/01-platform)
+              data/enterprise/01-platform|apps/enterprise)
                 ./scripts/link-stages.sh --env dev --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "${TARGET_STAGE}"
                 ;;
               data/enterprise/02-governance-ops)
@@ -218,17 +221,133 @@ jobs:
           fi
           if [ -n "${IAC_OUTPUTS_BUCKET}" ]; then
             case "${TARGET_STAGE}" in
+              apps/enterprise)
+                ./scripts/link-stages.sh --env dev --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/apps-enterprise-outputs.json" "${TARGET_STAGE}"
+                ;;
               foundation/02-security-network|data/enterprise/01-platform|data/enterprise/02-governance-ops|data/enterprise/03-data-science)
                 STAGE_SLUG="$(basename "${TARGET_STAGE}")"
                 ./scripts/link-stages.sh --env dev --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/${STAGE_SLUG}-outputs.json" "${TARGET_STAGE}"
                 if [ "${TARGET_STAGE}" = "data/enterprise/02-governance-ops" ]; then
                   if [ "${ENABLE_DS_STAGE}" = "true" ] || gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/dev/03-data-science-outputs.json" >/dev/null 2>&1; then
-                    ./scripts/link-stages.sh --env dev --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json"
+                    ./scripts/link-stages.sh --env dev --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json"
                   else
                     ./scripts/link-stages.sh --env dev --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json"
                   fi
                 elif [ "${TARGET_STAGE}" = "data/enterprise/03-data-science" ] && gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/dev/02-governance-ops-outputs.json" >/dev/null 2>&1; then
-                  ./scripts/link-stages.sh --env dev --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json"
+                  ./scripts/link-stages.sh --env dev --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json"
+                fi
+                ;;
+            esac
+          fi
+
+  deploy-uat:
+    needs: validate
+    if: >-
+      needs.validate.result == 'success' &&
+      vars.GCP_WIF_PROVIDER != '' &&
+      (
+        vars.GCP_WIF_SERVICE_ACCOUNT != '' ||
+        vars.GCP_TF_SA_EMAIL != '' ||
+        (inputs.stage == 'foundation/01-org-governance' && vars.GCP_ORG_GOV_WIF_SA != '') ||
+        (inputs.stage == 'foundation/02-security-network' && vars.GCP_NET_SEC_WIF_SA != '') ||
+        (inputs.stage == 'apps/enterprise' && vars.GCP_APP_WIF_SA != '') ||
+        ((inputs.stage == 'data/sandbox' || inputs.stage == 'data/enterprise/01-platform' || inputs.stage == 'data/enterprise/02-governance-ops' || inputs.stage == 'data/enterprise/03-data-science' || inputs.stage == '') && vars.GCP_DATA_PLAT_WIF_SA != '')
+      ) &&
+      vars.GCP_TFSTATE_BUCKET != '' &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.environment == 'uat'
+    runs-on: ubuntu-latest
+    environment: uat
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Authenticate via GitHub OIDC WIF
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ (inputs.stage == 'foundation/01-org-governance' && vars.GCP_ORG_GOV_WIF_SA) || (inputs.stage == 'foundation/02-security-network' && vars.GCP_NET_SEC_WIF_SA) || (inputs.stage == 'apps/enterprise' && vars.GCP_APP_WIF_SA) || ((inputs.stage == 'data/sandbox' || inputs.stage == 'data/enterprise/01-platform' || inputs.stage == 'data/enterprise/02-governance-ops' || inputs.stage == 'data/enterprise/03-data-science' || inputs.stage == '') && vars.GCP_DATA_PLAT_WIF_SA) || vars.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_TF_SA_EMAIL }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: "1.8.5"
+          terraform_wrapper: false
+
+      - name: Terraform Plan and Apply (uat)
+        env:
+          TARGET_STAGE: ${{ inputs.stage || 'data/enterprise/01-platform' }}
+          ENABLE_DS_STAGE: ${{ inputs.enable_ds_stage }}
+          TFSTATE_BUCKET: ${{ vars.GCP_TFSTATE_BUCKET }}
+          IAC_OUTPUTS_BUCKET: ${{ vars.IAC_OUTPUTS_BUCKET }}
+        run: |
+          case "${TARGET_STAGE}" in
+            foundation/01-org-governance|foundation/02-security-network|data/sandbox|data/enterprise/01-platform|data/enterprise/02-governance-ops|data/enterprise/03-data-science|apps/enterprise) ;;
+            *) echo "Disallowed stage: ${TARGET_STAGE}" >&2; exit 1 ;;
+          esac
+          if [[ ! "${TFSTATE_BUCKET}" =~ ^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$ ]]; then
+            echo "Invalid GCS bucket name in GCP_TFSTATE_BUCKET" >&2
+            exit 1
+          fi
+          if [ -n "${IAC_OUTPUTS_BUCKET}" ] && [[ ! "${IAC_OUTPUTS_BUCKET}" =~ ^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$ ]]; then
+            echo "Invalid GCS bucket name in IAC_OUTPUTS_BUCKET" >&2
+            exit 1
+          fi
+          if [ "${TARGET_STAGE}" = "foundation/01-org-governance" ]; then
+            BACKEND_PREFIX="foundation/01-org-governance/shared"
+          else
+            BACKEND_PREFIX="${TARGET_STAGE}/uat"
+          fi
+          if [ -n "${IAC_OUTPUTS_BUCKET}" ]; then
+            case "${TARGET_STAGE}" in
+              foundation/02-security-network)
+                ./scripts/link-stages.sh --env uat --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "${TARGET_STAGE}"
+                ;;
+              data/enterprise/01-platform|apps/enterprise)
+                ./scripts/link-stages.sh --env uat --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "${TARGET_STAGE}"
+                ;;
+              data/enterprise/02-governance-ops)
+                if [ "${ENABLE_DS_STAGE}" = "true" ] || gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/uat/03-data-science-outputs.json" >/dev/null 2>&1; then
+                  ./scripts/link-stages.sh --env uat --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json" "${TARGET_STAGE}"
+                else
+                  ./scripts/link-stages.sh --env uat --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "${TARGET_STAGE}"
+                fi
+                ;;
+              data/enterprise/03-data-science)
+                ./scripts/link-stages.sh --env uat --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "${TARGET_STAGE}"
+                ;;
+            esac
+          fi
+          terraform -chdir="${TARGET_STAGE}" init -reconfigure -input=false \
+            -backend-config="bucket=${TFSTATE_BUCKET}" \
+            -backend-config="prefix=${BACKEND_PREFIX}"
+          if [ -f "${TARGET_STAGE}/envs/uat.tfvars" ]; then
+            terraform -chdir="${TARGET_STAGE}" apply -auto-approve -input=false -var-file="envs/uat.tfvars"
+          else
+            terraform -chdir="${TARGET_STAGE}" apply -auto-approve -input=false
+          fi
+          if [ -n "${IAC_OUTPUTS_BUCKET}" ]; then
+            case "${TARGET_STAGE}" in
+              apps/enterprise)
+                ./scripts/link-stages.sh --env uat --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/apps-enterprise-outputs.json" "${TARGET_STAGE}"
+                ;;
+              foundation/02-security-network|data/enterprise/01-platform|data/enterprise/02-governance-ops|data/enterprise/03-data-science)
+                STAGE_SLUG="$(basename "${TARGET_STAGE}")"
+                ./scripts/link-stages.sh --env uat --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/${STAGE_SLUG}-outputs.json" "${TARGET_STAGE}"
+                if [ "${TARGET_STAGE}" = "data/enterprise/02-governance-ops" ]; then
+                  if [ "${ENABLE_DS_STAGE}" = "true" ] || gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/uat/03-data-science-outputs.json" >/dev/null 2>&1; then
+                    ./scripts/link-stages.sh --env uat --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json"
+                  else
+                    ./scripts/link-stages.sh --env uat --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json"
+                  fi
+                elif [ "${TARGET_STAGE}" = "data/enterprise/03-data-science" ] && gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/uat/02-governance-ops-outputs.json" >/dev/null 2>&1; then
+                  ./scripts/link-stages.sh --env uat --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json"
                 fi
                 ;;
             esac
@@ -247,6 +366,7 @@ jobs:
         vars.GCP_TF_SA_EMAIL != '' ||
         (inputs.stage == 'foundation/01-org-governance' && vars.GCP_ORG_GOV_WIF_SA != '') ||
         (inputs.stage == 'foundation/02-security-network' && vars.GCP_NET_SEC_WIF_SA != '') ||
+        (inputs.stage == 'apps/enterprise' && vars.GCP_APP_WIF_SA != '') ||
         ((inputs.stage == 'data/sandbox' || inputs.stage == 'data/enterprise/01-platform' || inputs.stage == 'data/enterprise/02-governance-ops' || inputs.stage == 'data/enterprise/03-data-science' || inputs.stage == '') && vars.GCP_DATA_PLAT_WIF_SA != '')
       ) &&
       vars.GCP_TFSTATE_BUCKET != '' &&
@@ -267,7 +387,7 @@ jobs:
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ (inputs.stage == 'foundation/01-org-governance' && vars.GCP_ORG_GOV_WIF_SA) || (inputs.stage == 'foundation/02-security-network' && vars.GCP_NET_SEC_WIF_SA) || ((inputs.stage == 'data/sandbox' || inputs.stage == 'data/enterprise/01-platform' || inputs.stage == 'data/enterprise/02-governance-ops' || inputs.stage == 'data/enterprise/03-data-science' || inputs.stage == '') && vars.GCP_DATA_PLAT_WIF_SA) || vars.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_TF_SA_EMAIL }}
+          service_account: ${{ (inputs.stage == 'foundation/01-org-governance' && vars.GCP_ORG_GOV_WIF_SA) || (inputs.stage == 'foundation/02-security-network' && vars.GCP_NET_SEC_WIF_SA) || (inputs.stage == 'apps/enterprise' && vars.GCP_APP_WIF_SA) || ((inputs.stage == 'data/sandbox' || inputs.stage == 'data/enterprise/01-platform' || inputs.stage == 'data/enterprise/02-governance-ops' || inputs.stage == 'data/enterprise/03-data-science' || inputs.stage == '') && vars.GCP_DATA_PLAT_WIF_SA) || vars.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_TF_SA_EMAIL }}
 
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
@@ -286,7 +406,7 @@ jobs:
           IAC_OUTPUTS_BUCKET: ${{ vars.IAC_OUTPUTS_BUCKET }}
         run: |
           case "${TARGET_STAGE}" in
-            foundation/01-org-governance|foundation/02-security-network|data/sandbox|data/enterprise/01-platform|data/enterprise/02-governance-ops|data/enterprise/03-data-science) ;;
+            foundation/01-org-governance|foundation/02-security-network|data/sandbox|data/enterprise/01-platform|data/enterprise/02-governance-ops|data/enterprise/03-data-science|apps/enterprise) ;;
             *) echo "Disallowed stage: ${TARGET_STAGE}" >&2; exit 1 ;;
           esac
           if [[ ! "${TFSTATE_BUCKET}" =~ ^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$ ]]; then
@@ -307,7 +427,7 @@ jobs:
               foundation/02-security-network)
                 ./scripts/link-stages.sh --env staging --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "${TARGET_STAGE}"
                 ;;
-              data/enterprise/01-platform)
+              data/enterprise/01-platform|apps/enterprise)
                 ./scripts/link-stages.sh --env staging --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "${TARGET_STAGE}"
                 ;;
               data/enterprise/02-governance-ops)
@@ -332,17 +452,20 @@ jobs:
           fi
           if [ -n "${IAC_OUTPUTS_BUCKET}" ]; then
             case "${TARGET_STAGE}" in
+              apps/enterprise)
+                ./scripts/link-stages.sh --env staging --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/apps-enterprise-outputs.json" "${TARGET_STAGE}"
+                ;;
               foundation/02-security-network|data/enterprise/01-platform|data/enterprise/02-governance-ops|data/enterprise/03-data-science)
                 STAGE_SLUG="$(basename "${TARGET_STAGE}")"
                 ./scripts/link-stages.sh --env staging --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/${STAGE_SLUG}-outputs.json" "${TARGET_STAGE}"
                 if [ "${TARGET_STAGE}" = "data/enterprise/02-governance-ops" ]; then
                   if [ "${ENABLE_DS_STAGE}" = "true" ] || gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/staging/03-data-science-outputs.json" >/dev/null 2>&1; then
-                    ./scripts/link-stages.sh --env staging --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json"
+                    ./scripts/link-stages.sh --env staging --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json"
                   else
                     ./scripts/link-stages.sh --env staging --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json"
                   fi
                 elif [ "${TARGET_STAGE}" = "data/enterprise/03-data-science" ] && gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/staging/02-governance-ops-outputs.json" >/dev/null 2>&1; then
-                  ./scripts/link-stages.sh --env staging --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json"
+                  ./scripts/link-stages.sh --env staging --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json"
                 fi
                 ;;
             esac
@@ -358,6 +481,7 @@ jobs:
         vars.GCP_TF_SA_EMAIL != '' ||
         (inputs.stage == 'foundation/01-org-governance' && vars.GCP_ORG_GOV_WIF_SA != '') ||
         (inputs.stage == 'foundation/02-security-network' && vars.GCP_NET_SEC_WIF_SA != '') ||
+        (inputs.stage == 'apps/enterprise' && vars.GCP_APP_WIF_SA != '') ||
         ((inputs.stage == 'data/sandbox' || inputs.stage == 'data/enterprise/01-platform' || inputs.stage == 'data/enterprise/02-governance-ops' || inputs.stage == 'data/enterprise/03-data-science' || inputs.stage == '') && vars.GCP_DATA_PLAT_WIF_SA != '')
       ) &&
       vars.GCP_TFSTATE_BUCKET != '' &&
@@ -376,7 +500,7 @@ jobs:
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ (inputs.stage == 'foundation/01-org-governance' && vars.GCP_ORG_GOV_WIF_SA) || (inputs.stage == 'foundation/02-security-network' && vars.GCP_NET_SEC_WIF_SA) || ((inputs.stage == 'data/sandbox' || inputs.stage == 'data/enterprise/01-platform' || inputs.stage == 'data/enterprise/02-governance-ops' || inputs.stage == 'data/enterprise/03-data-science' || inputs.stage == '') && vars.GCP_DATA_PLAT_WIF_SA) || vars.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_TF_SA_EMAIL }}
+          service_account: ${{ (inputs.stage == 'foundation/01-org-governance' && vars.GCP_ORG_GOV_WIF_SA) || (inputs.stage == 'foundation/02-security-network' && vars.GCP_NET_SEC_WIF_SA) || (inputs.stage == 'apps/enterprise' && vars.GCP_APP_WIF_SA) || ((inputs.stage == 'data/sandbox' || inputs.stage == 'data/enterprise/01-platform' || inputs.stage == 'data/enterprise/02-governance-ops' || inputs.stage == 'data/enterprise/03-data-science' || inputs.stage == '') && vars.GCP_DATA_PLAT_WIF_SA) || vars.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_TF_SA_EMAIL }}
 
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
@@ -395,7 +519,7 @@ jobs:
           IAC_OUTPUTS_BUCKET: ${{ vars.IAC_OUTPUTS_BUCKET }}
         run: |
           case "${TARGET_STAGE}" in
-            foundation/01-org-governance|foundation/02-security-network|data/sandbox|data/enterprise/01-platform|data/enterprise/02-governance-ops|data/enterprise/03-data-science) ;;
+            foundation/01-org-governance|foundation/02-security-network|data/sandbox|data/enterprise/01-platform|data/enterprise/02-governance-ops|data/enterprise/03-data-science|apps/enterprise) ;;
             *) echo "Disallowed stage: ${TARGET_STAGE}" >&2; exit 1 ;;
           esac
           if [[ ! "${TFSTATE_BUCKET}" =~ ^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$ ]]; then
@@ -416,7 +540,7 @@ jobs:
               foundation/02-security-network)
                 ./scripts/link-stages.sh --env prod --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "${TARGET_STAGE}"
                 ;;
-              data/enterprise/01-platform)
+              data/enterprise/01-platform|apps/enterprise)
                 ./scripts/link-stages.sh --env prod --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "${TARGET_STAGE}"
                 ;;
               data/enterprise/02-governance-ops)
@@ -441,17 +565,20 @@ jobs:
           fi
           if [ -n "${IAC_OUTPUTS_BUCKET}" ]; then
             case "${TARGET_STAGE}" in
+              apps/enterprise)
+                ./scripts/link-stages.sh --env prod --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/apps-enterprise-outputs.json" "${TARGET_STAGE}"
+                ;;
               foundation/02-security-network|data/enterprise/01-platform|data/enterprise/02-governance-ops|data/enterprise/03-data-science)
                 STAGE_SLUG="$(basename "${TARGET_STAGE}")"
                 ./scripts/link-stages.sh --env prod --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/${STAGE_SLUG}-outputs.json" "${TARGET_STAGE}"
                 if [ "${TARGET_STAGE}" = "data/enterprise/02-governance-ops" ]; then
                   if [ "${ENABLE_DS_STAGE}" = "true" ] || gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/prod/03-data-science-outputs.json" >/dev/null 2>&1; then
-                    ./scripts/link-stages.sh --env prod --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json"
+                    ./scripts/link-stages.sh --env prod --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json"
                   else
                     ./scripts/link-stages.sh --env prod --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json"
                   fi
                 elif [ "${TARGET_STAGE}" = "data/enterprise/03-data-science" ] && gcloud storage ls "gs://${IAC_OUTPUTS_BUCKET}/prod/02-governance-ops-outputs.json" >/dev/null 2>&1; then
-                  ./scripts/link-stages.sh --env prod --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json"
+                  ./scripts/link-stages.sh --env prod --export-gcs "gs://${IAC_OUTPUTS_BUCKET}/foundation-outputs.json" --from-gcs "gs://${IAC_OUTPUTS_BUCKET}/shared/01-org-governance-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-security-network-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/03-data-science-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/01-platform-outputs.json" "gs://${IAC_OUTPUTS_BUCKET}/02-governance-ops-outputs.json"
                 fi
                 ;;
             esac

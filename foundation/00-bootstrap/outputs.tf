@@ -63,6 +63,21 @@ output "tf_ds_ci_sa_email" {
   description = "Service account email for Data Science Terraform CI runs."
 }
 
+output "tf_app_ci_sa_email" {
+  value       = try(google_service_account.ci["tf_app_ci"].email, "")
+  description = "Service account email for Application Factory Terraform CI runs."
+}
+
+output "secops_ci_sa_email" {
+  value       = try(google_service_account.ci["secops_ci"].email, "")
+  description = "Service account email for SecOps Terraform CI runs."
+}
+
+output "finops_ci_sa_email" {
+  value       = try(google_service_account.ci["finops_ci"].email, "")
+  description = "Service account email for FinOps Terraform CI runs."
+}
+
 output "region" {
   value       = var.region
   description = "Default GCP region propagated to downstream stages."

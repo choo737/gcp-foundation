@@ -4,7 +4,8 @@ compliance_profile         = "regulated_fsi_rmit"
 environment                = "prod"
 region                     = "asia-southeast1"
 prefix                     = "ent"
-project_suffix             = "prd01"
+project_suffix             = "" # Leave empty when auto_unique_suffix = true
+auto_unique_suffix         = true
 billing_account            = "000000-000000-000000"
 compute_folder_id          = "folders/000000000000"
 governance_project_id      = "ent-prd01-data-gov"

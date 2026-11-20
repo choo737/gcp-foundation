@@ -28,6 +28,11 @@ output "workload_budget_names" {
   description = "Map of workload keys to Cloud Billing budget resource names."
 }
 
+output "department_budget_names" {
+  value       = { for k, b in google_billing_budget.department : k => b.name }
+  description = "Map of department cost_center keys to Cloud Billing budget resource names."
+}
+
 output "notification_channel_ids" {
   value       = { for email, ch in google_monitoring_notification_channel.budget_email : email => ch.name }
   description = "Map of FinOps email addresses to Cloud Monitoring notification channel names."

@@ -27,6 +27,7 @@ EXPECTED_ROOTS = (
     "data/enterprise/01-platform",
     "data/enterprise/02-governance-ops",
     "data/enterprise/03-data-science",
+    "apps/enterprise",
 )
 
 

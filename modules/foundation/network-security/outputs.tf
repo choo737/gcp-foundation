@@ -28,6 +28,37 @@ output "subnet_id" {
   description = "Resource ID of the private subnetwork, or null."
 }
 
+output "department_subnet_ids" {
+  value       = { for k, s in google_compute_subnetwork.department : k => s.id }
+  description = "Map of department keys (data, ai, app) to dedicated subnetwork resource IDs."
+}
+
+output "department_subnet_secondary_range_names" {
+  value = {
+    for k, cfg in local.department_secondary_ranges :
+    k => {
+      pods     = cfg.pods.range_name
+      services = cfg.services.range_name
+    }
+  }
+  description = "Map of department keys to GKE secondary IP range names (pods and services)."
+}
+
+output "data_subnet_id" {
+  value       = try(google_compute_subnetwork.department["data"].id, try(google_compute_subnetwork.this[0].id, null))
+  description = "Data department subnetwork resource ID, falling back to primary subnet_id."
+}
+
+output "ai_subnet_id" {
+  value       = try(google_compute_subnetwork.department["ai"].id, try(google_compute_subnetwork.this[0].id, null))
+  description = "AI department subnetwork resource ID, falling back to primary subnet_id."
+}
+
+output "app_subnet_id" {
+  value       = try(google_compute_subnetwork.department["app"].id, try(google_compute_subnetwork.this[0].id, null))
+  description = "Application department subnetwork resource ID, falling back to primary subnet_id."
+}
+
 output "datastream_network_attachment_id" {
   value       = try(google_compute_network_attachment.datastream[0].id, "")
   description = "Resource ID of the Datastream PSC network attachment, or empty string."

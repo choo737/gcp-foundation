@@ -38,6 +38,21 @@ output "environment_compute_folder_ids" {
   description = "Map of environment names to per-environment compute folder resource names."
 }
 
+output "environment_ai_folder_ids" {
+  value       = module.folder_hierarchy.environment_ai_folder_ids
+  description = "Map of environment names to per-environment ai folder resource names."
+}
+
+output "environment_app_folder_ids" {
+  value       = module.folder_hierarchy.environment_app_folder_ids
+  description = "Map of environment names to per-environment app folder resource names."
+}
+
+output "environment_network_folder_ids" {
+  value       = module.folder_hierarchy.environment_network_folder_ids
+  description = "Map of environment names to per-environment network folder resource names."
+}
+
 output "storage_folder_id" {
   value       = module.folder_hierarchy.storage_folder_id
   description = "Default storage folder resource name for backwards compatibility."
@@ -78,6 +93,26 @@ output "finops_project_number" {
   description = "Numeric project number of the effective FinOps project."
 }
 
+output "secops_project_id" {
+  value       = local.effective_secops_project
+  description = "Effective SecOps project ID hosting SCC findings and alerting."
+}
+
+output "secops_project_number" {
+  value       = var.create_dedicated_secops_project ? module.secops_project[0].project_number : module.audit_project.project_number
+  description = "Numeric project number of the effective SecOps project."
+}
+
+output "golden_images_project_number" {
+  value       = var.create_dedicated_secops_project ? module.secops_project[0].project_number : module.audit_project.project_number
+  description = "Numeric project number hosting the shared golden Artifact Registry repository."
+}
+
+output "shared_artifact_registry_id" {
+  value       = try(google_artifact_registry_repository.golden_images[0].id, "")
+  description = "Shared golden Docker Artifact Registry repository resource ID, or empty string."
+}
+
 output "billing_export_dataset_id" {
   value       = module.finops_governance.billing_export_dataset_id
   description = "Central Cloud Billing export BigQuery dataset ID."
@@ -101,6 +136,11 @@ output "environment_budget_names" {
 output "workload_budget_names" {
   value       = module.finops_governance.workload_budget_names
   description = "Map of workload keys to Cloud Billing budget resource names."
+}
+
+output "department_budget_names" {
+  value       = module.finops_governance.department_budget_names
+  description = "Map of department cost_center keys to Cloud Billing budget resource names."
 }
 
 output "backup_project_id" {
@@ -156,6 +196,11 @@ output "prefix" {
 output "project_suffix" {
   value       = var.project_suffix
   description = "Project uniqueness suffix propagated to downstream stages."
+}
+
+output "auto_unique_suffix" {
+  value       = var.auto_unique_suffix
+  description = "Automatic 4-hex uniqueness suffix toggle propagated to environment stages."
 }
 
 output "deletion_protection" {

@@ -7,22 +7,32 @@ provider "google-beta" {
 }
 
 locals {
-  project_prefix   = var.project_suffix != "" ? "${var.prefix}-${var.project_suffix}" : var.prefix
-  dataset_prefix   = replace(var.prefix, "-", "_")
-  is_small_tier    = var.team_size_tier == "S"
-  create_projects  = var.enable_data_science && !local.is_small_tier
-  env_labels       = merge(var.labels, { environment = var.environment })
-  trimmed_etl_proj = var.etl_compute_project_id != null ? trimspace(var.etl_compute_project_id) : ""
-  trimmed_gov_proj = var.governance_project_id != null ? trimspace(var.governance_project_id) : ""
-  trimmed_core     = var.core_storage_project_id != null ? trimspace(var.core_storage_project_id) : ""
-  trimmed_silver   = var.silver_dataset_id != null ? trimspace(var.silver_dataset_id) : ""
-  trimmed_gold     = var.primary_gold_project_id != null ? trimspace(var.primary_gold_project_id) : ""
-  trimmed_gold_ds  = var.primary_gold_dataset_id != null ? trimspace(var.primary_gold_dataset_id) : ""
-  trimmed_billing  = var.billing_account != null ? trimspace(var.billing_account) : ""
+  auto_code                = substr(sha256("${var.billing_account}-${var.prefix}-${var.environment}"), 0, 4)
+  effective_project_suffix = var.project_suffix != "" ? var.project_suffix : (var.auto_unique_suffix ? local.auto_code : "")
+  project_prefix           = local.effective_project_suffix != "" ? "${var.prefix}-${local.effective_project_suffix}" : var.prefix
+  dataset_prefix           = replace(var.prefix, "-", "_")
+  is_small_tier            = var.team_size_tier == "S"
+  create_projects          = var.enable_data_science && !local.is_small_tier
+  env_labels               = merge(var.labels, { cost_center = "ai", environment = var.environment })
+  trimmed_shared_ar        = var.shared_artifact_registry_id != null ? trimspace(var.shared_artifact_registry_id) : ""
+  shared_ar_parts          = local.trimmed_shared_ar != "" ? split("/", local.trimmed_shared_ar) : []
+  has_shared_ar            = can(regex("^projects/[^/]+/locations/[^/]+/repositories/[^/]+$", local.trimmed_shared_ar))
+  trimmed_etl_proj         = var.etl_compute_project_id != null ? trimspace(var.etl_compute_project_id) : ""
+  trimmed_gov_proj         = var.governance_project_id != null ? trimspace(var.governance_project_id) : ""
+  trimmed_core             = var.core_storage_project_id != null ? trimspace(var.core_storage_project_id) : ""
+  trimmed_silver           = var.silver_dataset_id != null ? trimspace(var.silver_dataset_id) : ""
+  trimmed_gold             = var.primary_gold_project_id != null ? trimspace(var.primary_gold_project_id) : ""
+  trimmed_gold_ds          = var.primary_gold_dataset_id != null ? trimspace(var.primary_gold_dataset_id) : ""
+  trimmed_billing          = var.billing_account != null ? trimspace(var.billing_account) : ""
 
   env_compute_folder_id       = lookup(var.environment_compute_folder_ids, var.environment, "")
   trimmed_compute_folder_id   = var.compute_folder_id != null ? trimspace(var.compute_folder_id) : ""
   effective_compute_folder_id = local.env_compute_folder_id != "" ? local.env_compute_folder_id : local.trimmed_compute_folder_id
+
+  env_ai_folder_id       = lookup(var.environment_ai_folder_ids, var.environment, "")
+  trimmed_ai_folder_id   = var.ai_folder_id != null ? trimspace(var.ai_folder_id) : ""
+  resolved_ai_folder_id  = local.env_ai_folder_id != "" ? local.env_ai_folder_id : local.trimmed_ai_folder_id
+  effective_ds_folder_id = local.resolved_ai_folder_id != "" ? local.resolved_ai_folder_id : local.effective_compute_folder_id
 
   effective_kms_key_id       = var.kms_key_id != null ? trimspace(var.kms_key_id) : ""
   use_cmek                   = local.effective_kms_key_id != ""
@@ -47,6 +57,24 @@ locals {
     : "group:${local.trimmed_ds_group}"
   ) : ""
 
+  trimmed_ai_admins = var.ai_admins_group != null ? trimspace(var.ai_admins_group) : ""
+  ai_admins_member = local.trimmed_ai_admins != "" ? (
+    startswith(local.trimmed_ai_admins, "group:") ||
+    startswith(local.trimmed_ai_admins, "user:") ||
+    startswith(local.trimmed_ai_admins, "serviceAccount:")
+    ? local.trimmed_ai_admins
+    : "group:${local.trimmed_ai_admins}"
+  ) : ""
+
+  trimmed_env_group = trimspace(lookup(var.env_groups, var.environment, ""))
+  env_group_member = local.trimmed_env_group != "" ? (
+    startswith(local.trimmed_env_group, "group:") ||
+    startswith(local.trimmed_env_group, "user:") ||
+    startswith(local.trimmed_env_group, "serviceAccount:")
+    ? local.trimmed_env_group
+    : "group:${local.trimmed_env_group}"
+  ) : ""
+
   ds_exp_project_id_candidate = "${local.project_prefix}-ds-exp"
   ml_ops_project_id_candidate = "${local.project_prefix}-ml-ops"
 
@@ -66,9 +94,24 @@ locals {
     local.is_small_tier ? try(data.google_project.tier_s_etl[0].number, "") : try(module.ml_ops_project[0].project_number, "")
   ) : ""
 
-  finops_env_tag_key = var.environment == "prod" ? "environment.prod" : "environment.nonprod"
+  finops_env_tag_key = (
+    var.environment == "prod"
+    ? "environment.prod"
+    : (var.environment == "uat" && contains(keys(var.finops_tag_value_ids), "environment.uat") ? "environment.uat" : "environment.nonprod")
+  )
+  shared_ar_readers = var.enable_data_science && local.has_shared_ar ? merge(
+    {
+      workbench_runtime = google_service_account.workbench_runtime[0].member
+      aiplatform_ml_ops = google_project_service_identity.aiplatform_ml_ops[0].member
+      cloudrun_ml_ops   = google_project_service_identity.cloudrun_ml_ops[0].member
+    },
+    local.create_projects ? {
+      aiplatform_ds_exp = google_project_service_identity.aiplatform_ds_exp[0].member
+    } : {},
+  ) : {}
+  cost_center_tag_id = lookup(var.finops_tag_value_ids, "cost_center.ai", lookup(var.finops_tag_value_ids, "cost_center.data", ""))
   project_tag_bindings = merge(
-    contains(keys(var.finops_tag_value_ids), "cost_center.data") ? { cost_center = var.finops_tag_value_ids["cost_center.data"] } : {},
+    local.cost_center_tag_id != "" ? { cost_center = local.cost_center_tag_id } : {},
     contains(keys(var.finops_tag_value_ids), local.finops_env_tag_key) ? { environment = var.finops_tag_value_ids[local.finops_env_tag_key] } : {},
   )
 
@@ -124,8 +167,8 @@ resource "terraform_data" "validate_stage_inputs" {
     }
 
     precondition {
-      condition     = local.is_small_tier || (local.effective_compute_folder_id != "" && local.trimmed_billing != "")
-      error_message = "compute_folder_id (or environment_compute_folder_ids) and billing_account are required when team_size_tier is M or L."
+      condition     = local.is_small_tier || (local.effective_ds_folder_id != "" && local.trimmed_billing != "")
+      error_message = "ai_folder_id (or environment_ai_folder_ids/compute_folder_id) and billing_account are required when team_size_tier is M or L."
     }
 
     precondition {
@@ -141,7 +184,7 @@ module "ds_exp_project" {
 
   project_id      = local.ds_exp_project_id_candidate
   project_name    = trimsuffix(substr("${local.project_prefix} DS Experiment", 0, 30), " ")
-  folder_id       = local.effective_compute_folder_id
+  folder_id       = local.effective_ds_folder_id
   billing_account = local.trimmed_billing
   deletion_policy = var.project_deletion_policy
   tag_bindings    = local.project_tag_bindings
@@ -161,7 +204,7 @@ module "ml_ops_project" {
 
   project_id      = local.ml_ops_project_id_candidate
   project_name    = trimsuffix(substr("${local.project_prefix} ML Ops", 0, 30), " ")
-  folder_id       = local.effective_compute_folder_id
+  folder_id       = local.effective_ds_folder_id
   billing_account = local.trimmed_billing
   deletion_policy = var.project_deletion_policy
   tag_bindings    = local.project_tag_bindings
@@ -454,6 +497,86 @@ resource "google_project_iam_member" "ds_analysts_ml_ops_aiplatform_viewer" {
   depends_on = [time_sleep.ds_api_propagation]
 }
 
+resource "google_project_iam_member" "ai_admins_ds_exp_aiplatform_viewer" {
+  count = var.enable_data_science && local.ai_admins_member != "" ? 1 : 0
+
+  project = local.effective_ds_exp_project_id
+  role    = "roles/aiplatform.viewer"
+  member  = local.ai_admins_member
+
+  depends_on = [time_sleep.ds_api_propagation]
+}
+
+resource "google_project_iam_member" "ai_admins_ds_exp_monitoring_viewer" {
+  count = var.enable_data_science && local.ai_admins_member != "" ? 1 : 0
+
+  project = local.effective_ds_exp_project_id
+  role    = "roles/monitoring.viewer"
+  member  = local.ai_admins_member
+
+  depends_on = [time_sleep.ds_api_propagation]
+}
+
+resource "google_project_iam_member" "ai_admins_ml_ops_aiplatform_viewer" {
+  count = var.enable_data_science && local.ai_admins_member != "" && !local.is_small_tier ? 1 : 0
+
+  project = local.effective_ml_ops_project_id
+  role    = "roles/aiplatform.viewer"
+  member  = local.ai_admins_member
+
+  depends_on = [time_sleep.ds_api_propagation]
+}
+
+resource "google_project_iam_member" "ai_admins_ml_ops_monitoring_viewer" {
+  count = var.enable_data_science && local.ai_admins_member != "" && !local.is_small_tier ? 1 : 0
+
+  project = local.effective_ml_ops_project_id
+  role    = "roles/monitoring.viewer"
+  member  = local.ai_admins_member
+
+  depends_on = [time_sleep.ds_api_propagation]
+}
+
+resource "google_project_iam_member" "env_group_ml_ops_monitoring_viewer" {
+  count = var.enable_data_science && local.env_group_member != "" ? 1 : 0
+
+  project = local.effective_ml_ops_project_id
+  role    = "roles/monitoring.viewer"
+  member  = local.env_group_member
+
+  depends_on = [time_sleep.ds_api_propagation]
+}
+
+resource "google_project_iam_member" "env_group_ml_ops_bq_viewer" {
+  count = var.enable_data_science && local.env_group_member != "" ? 1 : 0
+
+  project = local.effective_ml_ops_project_id
+  role    = "roles/bigquery.dataViewer"
+  member  = local.env_group_member
+
+  depends_on = [time_sleep.ds_api_propagation]
+}
+
+resource "google_project_iam_member" "env_group_nonprod_ds_exp_bq_job_user" {
+  count = var.enable_data_science && local.env_group_member != "" && var.environment != "prod" ? 1 : 0
+
+  project = local.effective_ds_exp_project_id
+  role    = "roles/bigquery.jobUser"
+  member  = local.env_group_member
+
+  depends_on = [time_sleep.ds_api_propagation]
+}
+
+resource "google_project_iam_member" "env_group_nonprod_ds_exp_bq_viewer" {
+  count = var.enable_data_science && local.env_group_member != "" && var.environment != "prod" && !local.is_small_tier ? 1 : 0
+
+  project = local.effective_ds_exp_project_id
+  role    = "roles/bigquery.dataViewer"
+  member  = local.env_group_member
+
+  depends_on = [time_sleep.ds_api_propagation]
+}
+
 resource "google_project_iam_member" "workbench_runtime_bq_job_user" {
   count = var.enable_data_science ? 1 : 0
 
@@ -532,6 +655,24 @@ resource "google_bigquery_datapolicy_data_policy_iam_member" "pii_masked_reader"
   data_policy_id = local.effective_data_policy_short_id
   role           = "roles/bigquerydatapolicy.maskedReader"
   member         = each.value
+}
+
+resource "google_artifact_registry_repository_iam_member" "shared_golden_reader" {
+  for_each = local.shared_ar_readers
+
+  project    = local.shared_ar_parts[1]
+  location   = local.shared_ar_parts[3]
+  repository = local.shared_ar_parts[5]
+  role       = "roles/artifactregistry.reader"
+  member     = each.value
+
+  depends_on = [
+    time_sleep.ds_api_propagation,
+    google_service_account.workbench_runtime,
+    google_project_service_identity.aiplatform_ml_ops,
+    google_project_service_identity.cloudrun_ml_ops,
+    google_project_service_identity.aiplatform_ds_exp,
+  ]
 }
 
 resource "time_sleep" "ds_cmek_and_iam_propagation" {
