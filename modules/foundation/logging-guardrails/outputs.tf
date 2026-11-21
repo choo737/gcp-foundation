@@ -9,8 +9,8 @@ output "log_analytics_linked_dataset_id" {
 }
 
 output "log_sink_writer_identity" {
-  value       = try(google_logging_folder_sink.audit[0].writer_identity, null)
-  description = "Writer service account identity of the folder audit sink."
+  value       = local.audit_sink_writer_identity
+  description = "Writer service account identity of the organization or folder audit sink."
 }
 
 output "siem_pubsub_topic_id" {

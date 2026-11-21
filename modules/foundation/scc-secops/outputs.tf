@@ -5,7 +5,7 @@ output "scc_tier" {
 
 output "scc_scope" {
   value       = var.scc_scope
-  description = "Configured Security Command Center scope (FOLDER or PROJECT)."
+  description = "Configured Security Command Center scope (ORGANIZATION, FOLDER, or PROJECT)."
 }
 
 output "scc_findings_dataset_id" {
@@ -15,9 +15,13 @@ output "scc_findings_dataset_id" {
 
 output "scc_big_query_export_name" {
   value = (
-    local.is_folder_scope
-    ? try(google_scc_v2_folder_scc_big_query_export.active_findings[0].name, null)
-    : try(values(google_scc_v2_project_scc_big_query_export.project_active_findings)[0].name, null)
+    local.is_org_scope
+    ? try(google_scc_v2_organization_scc_big_query_export.org_active_findings[0].name, null)
+    : (
+      local.is_folder_scope
+      ? try(google_scc_v2_folder_scc_big_query_export.active_findings[0].name, null)
+      : try(values(google_scc_v2_project_scc_big_query_export.project_active_findings)[0].name, null)
+    )
   )
   description = "SCC v2 continuous BigQuery export resource name, or null."
 }
@@ -51,7 +55,9 @@ output "scc_custom_sha_module_ids" {
   value = compact(concat(
     [
       try(google_scc_management_folder_security_health_analytics_custom_module.prod_bq_cmek[0].name, ""),
+      try(google_scc_management_organization_security_health_analytics_custom_module.org_prod_bq_cmek[0].name, ""),
       try(google_scc_management_folder_security_health_analytics_custom_module.gcs_ubla[0].name, ""),
+      try(google_scc_management_organization_security_health_analytics_custom_module.org_gcs_ubla[0].name, ""),
     ],
     [for m in values(google_scc_management_project_security_health_analytics_custom_module.project_prod_bq_cmek) : m.name],
     [for m in values(google_scc_management_project_security_health_analytics_custom_module.project_gcs_ubla) : m.name],

@@ -2,26 +2,33 @@ locals {
   enable_standard = contains(["STANDARD", "PREMIUM"], var.scc_tier)
   enable_premium  = var.scc_tier == "PREMIUM"
 
-  is_folder_scope  = var.scc_scope == "FOLDER"
-  is_project_scope = var.scc_scope == "PROJECT"
+  trimmed_folder_id = trimspace(var.folder_id)
+  parent_is_org     = startswith(local.trimmed_folder_id, "organizations/")
 
-  numeric_folder_id     = replace(var.folder_id, "folders/", "")
-  trimmed_kms_key_id    = var.kms_key_id != null ? trimspace(var.kms_key_id) : ""
-  effective_kms_key_id  = local.trimmed_kms_key_id
-  trimmed_org_id        = var.organization_id != null ? trimspace(var.organization_id) : ""
-  numeric_org_id        = replace(local.trimmed_org_id, "organizations/", "")
-  trimmed_siem_push_url = var.siem_push_endpoint != null ? trimspace(var.siem_push_endpoint) : ""
-  trimmed_etd_config    = var.custom_etd_config_json != null ? trimspace(var.custom_etd_config_json) : ""
-  trimmed_etd_name      = var.custom_etd_display_name != null ? trimspace(var.custom_etd_display_name) : ""
-  effective_etd_name    = local.trimmed_etd_name != "" ? local.trimmed_etd_name : "${replace(var.prefix, "-", "_")}_custom_etd_detector"
+  is_project_scope = var.scc_scope == "PROJECT"
+  is_org_scope     = var.scc_scope == "ORGANIZATION" || (var.scc_scope == "FOLDER" && local.parent_is_org)
+  is_folder_scope  = var.scc_scope == "FOLDER" && !local.parent_is_org
+
+  numeric_folder_id      = !local.parent_is_org ? replace(local.trimmed_folder_id, "folders/", "") : ""
+  trimmed_kms_key_id     = var.kms_key_id != null ? trimspace(var.kms_key_id) : ""
+  effective_kms_key_id   = local.trimmed_kms_key_id
+  trimmed_org_id         = var.organization_id != null ? trimspace(var.organization_id) : ""
+  numeric_org_id         = replace(local.trimmed_org_id, "organizations/", "")
+  effective_org_id_num   = local.numeric_org_id != "" ? local.numeric_org_id : (local.parent_is_org ? replace(local.trimmed_folder_id, "organizations/", "") : "")
+  parent_target_resource = local.parent_is_org ? "organizations/${replace(local.trimmed_folder_id, "organizations/", "")}" : "folders/${local.numeric_folder_id}"
+  trimmed_siem_push_url  = var.siem_push_endpoint != null ? trimspace(var.siem_push_endpoint) : ""
+  trimmed_etd_config     = var.custom_etd_config_json != null ? trimspace(var.custom_etd_config_json) : ""
+  trimmed_etd_name       = var.custom_etd_display_name != null ? trimspace(var.custom_etd_display_name) : ""
+  effective_etd_name     = local.trimmed_etd_name != "" ? local.trimmed_etd_name : "${replace(var.prefix, "-", "_")}_custom_etd_detector"
 
   clean_target_projects = distinct(compact([for p in var.scc_target_project_ids : trimspace(p)]))
   effective_project_ids = local.is_project_scope ? (length(local.clean_target_projects) > 0 ? local.clean_target_projects : [var.audit_project_id]) : []
 
-  prod_folder_raw = lookup(var.environment_folder_ids, "prod", "")
-  prod_folder_id  = trimspace(local.prod_folder_raw) != "" ? replace(trimspace(local.prod_folder_raw), "folders/", "") : local.numeric_folder_id
+  prod_folder_raw     = lookup(var.environment_folder_ids, "prod", "")
+  has_prod_env_folder = trimspace(local.prod_folder_raw) != ""
+  prod_folder_id      = local.has_prod_env_folder ? replace(trimspace(local.prod_folder_raw), "folders/", "") : local.numeric_folder_id
 
-  nonprod_mute_folders = local.enable_standard && var.enable_nonprod_mute_rules && local.is_folder_scope ? {
+  nonprod_mute_folders = local.enable_standard && var.enable_nonprod_mute_rules && (local.is_org_scope || local.is_folder_scope) ? {
     for env, fid in var.environment_folder_ids :
     env => replace(trimspace(fid), "folders/", "")
     if contains(var.nonprod_mute_environments, env) && trimspace(fid) != ""
@@ -42,12 +49,17 @@ locals {
 resource "terraform_data" "validate_security_posture" {
   lifecycle {
     precondition {
-      condition     = !(local.enable_premium && var.enable_security_posture) || local.numeric_org_id != ""
+      condition     = !local.is_org_scope || local.effective_org_id_num != ""
+      error_message = "organization_id or an organizations/<id> parent is required for organization-scoped SCC resources."
+    }
+
+    precondition {
+      condition     = !(local.enable_premium && var.enable_security_posture) || local.effective_org_id_num != ""
       error_message = "organization_id is required when enable_security_posture is true in PREMIUM tier."
     }
 
     precondition {
-      condition     = !(local.enable_premium && var.enable_custom_etd_module) || (local.numeric_org_id != "" && local.trimmed_etd_config != "")
+      condition     = !(local.enable_premium && var.enable_custom_etd_module) || (local.effective_org_id_num != "" && local.trimmed_etd_config != "")
       error_message = "organization_id and custom_etd_config_json are required when enable_custom_etd_module is true."
     }
   }
@@ -71,6 +83,26 @@ resource "google_bigquery_dataset" "scc_findings" {
       kms_key_name = default_encryption_configuration.value
     }
   }
+}
+
+resource "google_scc_v2_organization_scc_big_query_export" "org_active_findings" {
+  count = local.enable_standard && var.enable_bigquery_export && local.is_org_scope ? 1 : 0
+
+  big_query_export_id = "${var.prefix}-scc-bq-export"
+  organization        = local.effective_org_id_num
+  location            = var.scc_location
+  dataset             = "projects/${var.audit_project_id}/datasets/${google_bigquery_dataset.scc_findings[0].dataset_id}"
+  filter              = "state=\"ACTIVE\" AND NOT mute=\"MUTED\""
+  description         = "Continuous organization export of active unmuted SCC v2 findings to regional BigQuery."
+}
+
+resource "google_bigquery_dataset_iam_member" "scc_org_export_writer" {
+  count = local.enable_standard && var.enable_bigquery_export && local.is_org_scope ? 1 : 0
+
+  project    = var.audit_project_id
+  dataset_id = google_bigquery_dataset.scc_findings[0].dataset_id
+  role       = "roles/bigquery.dataEditor"
+  member     = startswith(google_scc_v2_organization_scc_big_query_export.org_active_findings[0].principal, "serviceAccount:") ? google_scc_v2_organization_scc_big_query_export.org_active_findings[0].principal : "serviceAccount:${google_scc_v2_organization_scc_big_query_export.org_active_findings[0].principal}"
 }
 
 resource "google_scc_v2_folder_scc_big_query_export" "active_findings" {
@@ -137,6 +169,20 @@ resource "google_pubsub_subscription" "scc_findings_alert" {
     content {
       push_endpoint = push_config.value
     }
+  }
+}
+
+resource "google_scc_v2_organization_notification_config" "org_high_critical" {
+  count = local.enable_standard && var.enable_pubsub_notifications && local.is_org_scope ? 1 : 0
+
+  config_id    = "${var.prefix}-scc-high-crit"
+  organization = local.effective_org_id_num
+  location     = var.scc_location
+  pubsub_topic = google_pubsub_topic.scc_findings[0].id
+  description  = "Stream organization active unmuted HIGH and CRITICAL SCC findings to Pub/Sub."
+
+  streaming_config {
+    filter = "(severity=\"HIGH\" OR severity=\"CRITICAL\") AND state=\"ACTIVE\" AND NOT mute=\"MUTED\""
   }
 }
 
@@ -222,9 +268,33 @@ resource "google_monitoring_alert_policy" "scc_unacked_findings" {
 }
 
 resource "google_scc_management_folder_security_health_analytics_custom_module" "prod_bq_cmek" {
-  count = local.enable_premium && var.enable_custom_sha_modules && local.is_folder_scope ? 1 : 0
+  count = local.enable_premium && var.enable_custom_sha_modules && ((local.is_folder_scope && local.prod_folder_id != "") || (local.is_org_scope && local.has_prod_env_folder)) ? 1 : 0
 
   folder           = local.prod_folder_id
+  location         = "global"
+  display_name     = "${replace(var.prefix, "-", "_")}_prod_bq_cmek_required"
+  enablement_state = "ENABLED"
+
+  custom_config {
+    severity       = "HIGH"
+    description    = "Production BigQuery datasets must enforce customer-managed encryption keys (CMEK)."
+    recommendation = "Configure default_encryption_configuration.kms_key_name on the BigQuery dataset."
+
+    resource_selector {
+      resource_types = ["bigquery.googleapis.com/Dataset"]
+    }
+
+    predicate {
+      expression = "!has(resource.defaultEncryptionConfiguration) || resource.defaultEncryptionConfiguration.kmsKeyName == \"\""
+      title      = "Missing BigQuery Dataset CMEK"
+    }
+  }
+}
+
+resource "google_scc_management_organization_security_health_analytics_custom_module" "org_prod_bq_cmek" {
+  count = local.enable_premium && var.enable_custom_sha_modules && local.is_org_scope && !local.has_prod_env_folder ? 1 : 0
+
+  organization     = local.effective_org_id_num
   location         = "global"
   display_name     = "${replace(var.prefix, "-", "_")}_prod_bq_cmek_required"
   enablement_state = "ENABLED"
@@ -249,6 +319,30 @@ resource "google_scc_management_folder_security_health_analytics_custom_module" 
   count = local.enable_premium && var.enable_custom_sha_modules && local.is_folder_scope ? 1 : 0
 
   folder           = local.numeric_folder_id
+  location         = "global"
+  display_name     = "${replace(var.prefix, "-", "_")}_gcs_uniform_access_required"
+  enablement_state = "ENABLED"
+
+  custom_config {
+    severity       = "HIGH"
+    description    = "Cloud Storage buckets must enable Uniform Bucket-Level Access."
+    recommendation = "Enable uniform_bucket_level_access on the Cloud Storage bucket."
+
+    resource_selector {
+      resource_types = ["storage.googleapis.com/Bucket"]
+    }
+
+    predicate {
+      expression = "!has(resource.iamConfiguration) || !has(resource.iamConfiguration.uniformBucketLevelAccess) || !resource.iamConfiguration.uniformBucketLevelAccess.enabled"
+      title      = "Uniform Bucket-Level Access Disabled"
+    }
+  }
+}
+
+resource "google_scc_management_organization_security_health_analytics_custom_module" "org_gcs_ubla" {
+  count = local.enable_premium && var.enable_custom_sha_modules && local.is_org_scope ? 1 : 0
+
+  organization     = local.effective_org_id_num
   location         = "global"
   display_name     = "${replace(var.prefix, "-", "_")}_gcs_uniform_access_required"
   enablement_state = "ENABLED"
@@ -318,9 +412,9 @@ resource "google_scc_management_project_security_health_analytics_custom_module"
 }
 
 resource "google_scc_management_organization_event_threat_detection_custom_module" "this" {
-  count = local.enable_premium && var.enable_custom_etd_module && local.numeric_org_id != "" && local.trimmed_etd_config != "" ? 1 : 0
+  count = local.enable_premium && var.enable_custom_etd_module && local.effective_org_id_num != "" && local.trimmed_etd_config != "" ? 1 : 0
 
-  organization     = local.numeric_org_id
+  organization     = local.effective_org_id_num
   location         = "global"
   display_name     = local.effective_etd_name
   enablement_state = "ENABLED"
@@ -331,10 +425,10 @@ resource "google_scc_management_organization_event_threat_detection_custom_modul
 }
 
 resource "google_securityposture_posture" "foundation" {
-  count = local.enable_premium && var.enable_security_posture && local.numeric_org_id != "" ? 1 : 0
+  count = local.enable_premium && var.enable_security_posture && local.effective_org_id_num != "" ? 1 : 0
 
   posture_id  = "${var.prefix}-foundation-posture"
-  parent      = "organizations/${local.numeric_org_id}"
+  parent      = "organizations/${local.effective_org_id_num}"
   location    = "global"
   state       = "ACTIVE"
   description = "Continuous drift posture for key Org Policy guardrails."
@@ -387,13 +481,13 @@ resource "google_securityposture_posture" "foundation" {
 }
 
 resource "google_securityposture_posture_deployment" "root_folder" {
-  count = local.enable_premium && var.enable_security_posture && local.numeric_org_id != "" ? 1 : 0
+  count = local.enable_premium && var.enable_security_posture && local.effective_org_id_num != "" ? 1 : 0
 
   posture_deployment_id = "${var.prefix}-root-posture-deploy"
-  parent                = "organizations/${local.numeric_org_id}"
+  parent                = "organizations/${local.effective_org_id_num}"
   location              = "global"
-  description           = "Deploy foundation posture drift monitoring onto the root folder."
-  target_resource       = "folders/${local.numeric_folder_id}"
+  description           = "Deploy foundation posture drift monitoring onto the root organization or folder."
+  target_resource       = local.parent_target_resource
   posture_id            = google_securityposture_posture.foundation[0].name
   posture_revision_id   = google_securityposture_posture.foundation[0].revision_id
 }

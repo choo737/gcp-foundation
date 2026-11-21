@@ -1,6 +1,11 @@
+output "parent_id" {
+  value       = var.parent_id
+  description = "Root organization or parent folder ID."
+}
+
 output "root_folder_id" {
   value       = module.folder_hierarchy.root_folder_id
-  description = "Root foundation folder resource name."
+  description = "Root organization or parent folder resource name."
 }
 
 output "shared_infra_folder_id" {
@@ -9,12 +14,12 @@ output "shared_infra_folder_id" {
 }
 
 output "data_platform_folder_id" {
-  value       = module.folder_hierarchy.workload_folder_ids["data-platform"]
-  description = "Data platform workload folder resource name."
+  value       = length(var.environments) > 0 ? lookup(module.folder_hierarchy.environment_data_platform_folder_ids, contains(var.environments, "prod") ? "prod" : var.environments[0], "") : ""
+  description = "Default environment data-platform folder resource name."
 }
 
 output "data_folder_id" {
-  value       = module.folder_hierarchy.workload_folder_ids["data-platform"]
+  value       = length(var.environments) > 0 ? lookup(module.folder_hierarchy.environment_data_platform_folder_ids, contains(var.environments, "prod") ? "prod" : var.environments[0], "") : ""
   description = "Alias for data_platform_folder_id consumed by enterprise data stage 01."
 }
 

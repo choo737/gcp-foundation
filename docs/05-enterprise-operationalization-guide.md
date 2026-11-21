@@ -33,11 +33,11 @@ terraform -chdir=foundation/00-bootstrap apply
 
 1. Complete [QUESTIONNAIRE.md](../QUESTIONNAIRE.md) or read gitignored `platform-context.json` from [gcp-launchpad](https://github.com/choo737/gcp-launchpad).
 2. Write answers into gitignored `foundation/01-org-governance/custom.auto.tfvars`.
-3. Enable `enable_org_policies = true` to enforce all 38 folder-level Org Policies.
+3. Enable `enable_org_policies = true` to enforce all 38 org-level or folder-level Org Policies.
 4. Set `retention_days = 2555`, `lock_audit_bucket = true`, `enable_audit_cmek = true`, and `enable_audit_project_lien = true` for FSI.
 5. Keep `create_dedicated_finops_project = true`, configure `finops_alert_email_addresses`, and link Cloud Billing export in `"US"`.
 6. Enable `enable_backup_dr = true` for immutable Backup Vaults and daily GCE and Cloud SQL schedules.
-7. Select `scc_tier` (`NONE`, `STANDARD`, or `PREMIUM`) and `scc_scope` (`FOLDER` or `PROJECT`) for Security Command Center v2.
+7. Select `scc_tier` (`NONE`, `STANDARD`, or `PREMIUM`) and `scc_scope` (`ORGANIZATION`, `FOLDER`, or `PROJECT`) for Security Command Center v2.
 
 ```bash
 export TFSTATE_BUCKET="<prefix>-<suffix>-tfstate"
@@ -87,7 +87,7 @@ make apply STAGE="data/enterprise/02-governance-ops" ENV="${ENV}" TFSTATE_BUCKET
 4. Domain code `ret` also maps `gold_retail_project` and `gold_retail_dataset` for `gcp-data-medallion`.
 5. Add extra Dataplex Auto Data Quality scans declaratively using `additional_quality_scans` inside `data/enterprise/02-governance-ops/envs/<env>.tfvars`.
 6. Tune `baseline_slots` and `max_slots` in `01-platform/envs/<env>.tfvars` to scale BigQuery `ENTERPRISE` reservations.
-7. Add new workload folders through `workload_folders` in `foundation/01-org-governance` or per-environment folders under `environments`.
+7. Add per-environment workload folders under `environments/<env>` in `modules/foundation/folder-hierarchy` or create direct folders under `parent_id`.
 
 ```hcl
 # Example inside data/enterprise/02-governance-ops/envs/dev.tfvars

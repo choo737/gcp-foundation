@@ -146,6 +146,12 @@ class SccSecOpsTest(unittest.TestCase):
         self.assertIn("siem_kms_key_id", org_main)
 
         self.assertRegex(mod_vars, r'variable\s+"scc_scope"[\s\S]*?default\s*=\s*"FOLDER"')
+        self.assertRegex(mod_vars, r'contains\(\["ORGANIZATION",\s*"FOLDER",\s*"PROJECT"\],\s*var\.scc_scope\)')
+        self.assertIn('resource "google_scc_v2_organization_scc_big_query_export" "org_active_findings"', mod_main)
+        self.assertIn('resource "google_scc_v2_organization_notification_config" "org_high_critical"', mod_main)
+        self.assertIn('resource "google_scc_management_organization_security_health_analytics_custom_module" "org_gcs_ubla"', mod_main)
+        self.assertIn('resource "google_scc_management_organization_security_health_analytics_custom_module" "org_prod_bq_cmek"', mod_main)
+        self.assertRegex(mod_main, r"target_resource\s*=\s*local\.parent_target_resource")
         self.assertIn('resource "google_scc_v2_project_scc_big_query_export" "project_active_findings"', mod_main)
         self.assertIn('resource "google_scc_v2_project_notification_config" "project_high_critical"', mod_main)
         self.assertIn('resource "google_scc_management_project_security_health_analytics_custom_module" "project_prod_bq_cmek"', mod_main)

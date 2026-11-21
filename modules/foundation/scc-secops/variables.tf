@@ -12,11 +12,11 @@ variable "scc_tier" {
 variable "scc_scope" {
   type        = string
   default     = "FOLDER"
-  description = "SCC activation scope (FOLDER for org/folder hierarchy or PROJECT for standalone PAYG project export and alerts)."
+  description = "SCC activation scope (ORGANIZATION, FOLDER for org/folder hierarchy, or PROJECT for standalone PAYG project export and alerts)."
 
   validation {
-    condition     = contains(["FOLDER", "PROJECT"], var.scc_scope)
-    error_message = "scc_scope must be FOLDER or PROJECT."
+    condition     = contains(["ORGANIZATION", "FOLDER", "PROJECT"], var.scc_scope)
+    error_message = "scc_scope must be ORGANIZATION, FOLDER, or PROJECT."
   }
 }
 
@@ -39,7 +39,7 @@ variable "scc_location" {
 
 variable "folder_id" {
   type        = string
-  description = "Root foundation folder ID (folders/<id> or numeric <id>)."
+  description = "Root organization or folder ID (organizations/<id>, folders/<id>, or numeric <id>)."
 }
 
 variable "environment_folder_ids" {

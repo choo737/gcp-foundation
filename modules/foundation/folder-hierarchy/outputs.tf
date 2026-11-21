@@ -1,21 +1,16 @@
+output "parent_id" {
+  value       = var.parent_id
+  description = "Parent organization or folder resource name."
+}
+
 output "root_folder_id" {
-  value       = try(google_folder.root[0].name, var.parent_id)
-  description = "Resource name of the root folder (folders/<id> or parent_id)."
+  value       = var.parent_id
+  description = "Backwards-compatible alias for parent_id."
 }
 
 output "shared_infra_folder_id" {
   value       = google_folder.shared_infra.name
   description = "Resource name of the shared-infrastructure folder."
-}
-
-output "workloads_folder_id" {
-  value       = google_folder.workloads.name
-  description = "Resource name of the workloads folder."
-}
-
-output "workload_folder_ids" {
-  value       = { for k, f in google_folder.workload : k => f.name }
-  description = "Map of workload pillar names to folder resource names."
 }
 
 output "environment_folder_ids" {

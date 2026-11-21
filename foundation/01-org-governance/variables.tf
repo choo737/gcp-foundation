@@ -352,11 +352,11 @@ variable "audit_kms_protection_level" {
 variable "scc_scope" {
   type        = string
   default     = "FOLDER"
-  description = "SCC activation scope (FOLDER for org/folder hierarchy or PROJECT for standalone PAYG project scope)."
+  description = "SCC activation scope (ORGANIZATION, FOLDER for org/folder hierarchy, or PROJECT for standalone PAYG project scope)."
 
   validation {
-    condition     = contains(["FOLDER", "PROJECT"], var.scc_scope)
-    error_message = "scc_scope must be FOLDER or PROJECT."
+    condition     = contains(["ORGANIZATION", "FOLDER", "PROJECT"], var.scc_scope)
+    error_message = "scc_scope must be ORGANIZATION, FOLDER, or PROJECT."
   }
 }
 

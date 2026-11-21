@@ -5,7 +5,12 @@ variable "audit_project_id" {
 
 variable "folder_id" {
   type        = string
-  description = "Target folder ID monitored by the sink and guardrails."
+  description = "Target organization or folder ID (organizations/<id>, folders/<id>, or numeric folder ID) monitored by the sink and guardrails."
+
+  validation {
+    condition     = can(regex("^(organizations/[0-9]+|folders/[0-9]+|[0-9]+)$", trimspace(var.folder_id)))
+    error_message = "folder_id must be organizations/<id>, folders/<id>, or a numeric folder ID."
+  }
 }
 
 variable "billing_account" {
@@ -92,7 +97,7 @@ variable "essential_contacts" {
     language_tag = optional(string, "en-US")
   }))
   default     = {}
-  description = "Optional Essential Contacts mapped to the root foundation folder."
+  description = "Optional Essential Contacts mapped to the root organization or folder."
 }
 
 variable "foundation_iam_groups" {

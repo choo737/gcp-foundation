@@ -8,32 +8,29 @@ Deployed Google Cloud Resource Manager `[Folder]`, `[Project]`, and `(Owner Team
 
 ```text
 organizations/<org_id> (or folders/<parent_id>)
-└── <prefix>-<suffix>-gcp-foundation [Folder] (CloudOps Admins / Security Admins)
-    ├── shared-infrastructure [Folder] (CloudOps Admins)
-    │   ├── <prefix>-<suffix>-audit [Project] (CloudOps Admins / Security Admins)
-    │   ├── <prefix>-<suffix>-cmn-secops [Project] (SecOps Analysts)
-    │   ├── <prefix>-<suffix>-cmn-finops [Project] (FinOps Admins)
-    │   └── <prefix>-<suffix>-cmn-backup [Project] (CloudOps Admins)
-    ├── environments [Folder]
-    │   └── {dev, uat, staging, prod} [Folder]
-    │       ├── network [Folder] (Network Admins)
-    │       │   └── <prefix>-<suffix>-network [Project] (Network Admins)
-    │       ├── data-platform [Folder] (Data Engineers)
-    │       │   ├── storage [Folder]
-    │       │   │   ├── <prefix>-<suffix>-data-gov [Project] (Governance Stewards)
-    │       │   │   ├── <prefix>-<suffix>-data-core [Project] (Data Engineers)
-    │       │   │   └── <prefix>-<suffix>-data-<domain> [Project] (Data Engineers)
-    │       │   └── compute [Folder]
-    │       │       ├── <prefix>-<suffix>-data-etl [Project] (Data Engineers)
-    │       │       └── <prefix>-<suffix>-data-bi [Project] (BI Analysts)
-    │       ├── ai [Folder] (AI Admins)
-    │       │   ├── <prefix>-<suffix>-ds-exp [Project] (DS Analysts)
-    │       │   └── <prefix>-<suffix>-ml-ops [Project] (AI Admins)
-    │       └── app [Folder] (App Admins)
-    │           └── <display_name> [Folder] (App Team)
-    │               └── <prefix>-<suffix>-app-<key> [Project] (App Developers)
-    └── workloads [Folder]
-        └── data-platform [Folder] (brownfield fallback)
+├── shared-infrastructure [Folder] (CloudOps Admins)
+│   ├── <prefix>-<suffix>-audit [Project] (CloudOps Admins / Security Admins)
+│   ├── <prefix>-<suffix>-cmn-secops [Project] (SecOps Analysts)
+│   ├── <prefix>-<suffix>-cmn-finops [Project] (FinOps Admins)
+│   └── <prefix>-<suffix>-cmn-backup [Project] (CloudOps Admins)
+└── environments [Folder]
+    └── {dev, uat, staging, prod} [Folder]
+        ├── network [Folder] (Network Admins)
+        │   └── <prefix>-<suffix>-network [Project] (Network Admins)
+        ├── data-platform [Folder] (Data Engineers)
+        │   ├── storage [Folder]
+        │   │   ├── <prefix>-<suffix>-data-gov [Project] (Governance Stewards)
+        │   │   ├── <prefix>-<suffix>-data-core [Project] (Data Engineers)
+        │   │   └── <prefix>-<suffix>-data-<domain> [Project] (Data Engineers)
+        │   └── compute [Folder]
+        │       ├── <prefix>-<suffix>-data-etl [Project] (Data Engineers)
+        │       └── <prefix>-<suffix>-data-bi [Project] (BI Analysts)
+        ├── ai [Folder] (AI Admins)
+        │   ├── <prefix>-<suffix>-ds-exp [Project] (DS Analysts)
+        │   └── <prefix>-<suffix>-ml-ops [Project] (AI Admins)
+        └── app [Folder] (App Admins)
+            └── <display_name> [Folder] (App Team)
+                └── <prefix>-<suffix>-app-<key> [Project] (App Developers)
 ```
 
 ## Five-Project Data Separation

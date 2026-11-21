@@ -15,7 +15,8 @@ Only `STANDARD` (free) and `PREMIUM` (paid) remain active tiers.
 
 ## Scope Modes and Alerting
 
-- `scc_scope = "FOLDER"` creates folder-level exports, notification configs, mute rules, and SHA modules.
+- `scc_scope = "ORGANIZATION"` creates organization-level exports, notification configs, non-prod mute rules, and org SHA modules.
+- `scc_scope = "FOLDER"` creates folder-level exports, notifications, mute rules, and SHA modules. Organization parents switch these to org scope.
 - `scc_scope = "PROJECT"` creates project-level PAYG exports, notification configs, and SHA modules for `scc_target_project_ids`.
 - Monitoring alerts track `pubsub.googleapis.com/topic/send_message_operation_count` with `auto_close = "1800s"`.
 - Optional `siem_push_endpoint` adds a Pub/Sub `push_config` onto the findings subscription.

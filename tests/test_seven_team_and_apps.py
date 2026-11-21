@@ -699,6 +699,130 @@ class SevenTeamAndAppsTest(unittest.TestCase):
                 self.assertIn("Invalid value for variable", bad_res.stderr)
                 self.assertIn("department_budget_ancestors", bad_res.stderr)
 
+    def test_pass16_direct_parent_id_and_org_or_folder_guardrails(self) -> None:
+        fh_vars = (REPO_ROOT / "modules/foundation/folder-hierarchy/variables.tf").read_text(encoding="utf-8")
+        fh_main = (REPO_ROOT / "modules/foundation/folder-hierarchy/main.tf").read_text(encoding="utf-8")
+        fh_outs = (REPO_ROOT / "modules/foundation/folder-hierarchy/outputs.tf").read_text(encoding="utf-8")
+        self.assertNotIn('resource "google_folder" "root"', fh_main)
+        self.assertNotIn('resource "google_folder" "workloads"', fh_main)
+        self.assertNotIn('variable "create_root_folder"', fh_vars)
+        self.assertNotIn('variable "workload_folders"', fh_vars)
+        self.assertEqual(fh_main.count("parent              = var.parent_id"), 2)
+        self.assertIn('output "parent_id"', fh_outs)
+        self.assertIn('output "root_folder_id"', fh_outs)
+
+        lg_main = (REPO_ROOT / "modules/foundation/logging-guardrails/main.tf").read_text(encoding="utf-8")
+        for res in (
+            'resource "google_logging_organization_sink" "audit"',
+            'resource "google_logging_folder_sink" "audit"',
+            'resource "google_organization_iam_audit_config" "data_access"',
+            'resource "google_folder_iam_audit_config" "data_access"',
+            'resource "google_scc_v2_organization_notification_config" "high_critical"',
+            'resource "google_scc_v2_folder_notification_config" "high_critical"',
+            'resource "google_organization_iam_member" "foundation_viewers"',
+            'resource "google_folder_iam_member" "foundation_viewers"',
+        ):
+            self.assertIn(res, lg_main)
+        self.assertNotRegex(lg_main, r'parent\s*=\s*var\.folder_id')
+
+        tf_bin = shutil.which("terraform")
+        if tf_bin is not None:
+            cached = REPO_ROOT / "foundation" / "01-org-governance" / ".terraform" / "providers"
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp_path = Path(tmp)
+                for mod_name in ("folder-hierarchy", "logging-guardrails", "scc-secops"):
+                    mod_dir = tmp_path / mod_name
+                    shutil.copytree(REPO_ROOT / "modules" / "foundation" / mod_name, mod_dir)
+                    init_cmd = [tf_bin, f"-chdir={mod_dir}", "init", "-input=false"]
+                    if cached.is_dir():
+                        init_cmd.append(f"-plugin-dir={cached}")
+                    self.assertEqual(subprocess.run(init_cmd, capture_output=True, text=True, check=False).returncode, 0)
+
+                fh_dir = tmp_path / "folder-hierarchy"
+                for parent in ("organizations/123456789012", "folders/987654321012"):
+                    (fh_dir / "test.auto.tfvars.json").write_text(json.dumps({"parent_id": parent}), encoding="utf-8")
+                    res = subprocess.run(
+                        [tf_bin, f"-chdir={fh_dir}", "console"],
+                        input="var.parent_id\n",
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(res.returncode, 0, res.stderr)
+                    self.assertEqual(res.stdout.strip().strip('"'), parent)
+
+                lg_dir = tmp_path / "logging-guardrails"
+                for parent, expect in (
+                    (
+                        "organizations/123456789012",
+                        {"is_org_parent": True, "numeric_org_id": "123456789012", "numeric_folder_id": "", "parent_resource": "organizations/123456789012"},
+                    ),
+                    (
+                        "folders/987654321012",
+                        {"is_org_parent": False, "numeric_org_id": "", "numeric_folder_id": "987654321012", "parent_resource": "folders/987654321012"},
+                    ),
+                ):
+                    (lg_dir / "test.auto.tfvars.json").write_text(
+                        json.dumps({"folder_id": parent, "audit_project_id": "audit-proj", "prefix": "ent"}),
+                        encoding="utf-8",
+                    )
+                    res = subprocess.run(
+                        [tf_bin, f"-chdir={lg_dir}", "console"],
+                        input="jsonencode({ is_org_parent = local.is_org_parent, numeric_org_id = local.numeric_org_id, numeric_folder_id = local.numeric_folder_id, parent_resource = local.parent_resource })\n",
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(res.returncode, 0, res.stderr)
+                    self.assertEqual(json.loads(json.loads(res.stdout.strip())), expect)
+
+                (lg_dir / "test.auto.tfvars.json").write_text(
+                    json.dumps({"folder_id": "projects/123456789012", "audit_project_id": "audit-proj", "prefix": "ent"}),
+                    encoding="utf-8",
+                )
+                bad_lg = subprocess.run(
+                    [tf_bin, f"-chdir={lg_dir}", "console"],
+                    input="var.folder_id\n",
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertIn("Invalid value for variable", bad_lg.stderr)
+
+                scc_dir = tmp_path / "scc-secops"
+                for parent, scc_scope, expect in (
+                    (
+                        "organizations/123456789012",
+                        "FOLDER",
+                        {"parent_is_org": True, "is_org_scope": True, "is_folder_scope": False, "effective_org_id_num": "123456789012", "parent_target_resource": "organizations/123456789012", "mute_envs": ["dev", "staging"]},
+                    ),
+                    (
+                        "folders/987654321012",
+                        "FOLDER",
+                        {"parent_is_org": False, "is_org_scope": False, "is_folder_scope": True, "effective_org_id_num": "", "parent_target_resource": "folders/987654321012", "mute_envs": ["dev", "staging"]},
+                    ),
+                ):
+                    (scc_dir / "test.auto.tfvars.json").write_text(
+                        json.dumps({
+                            "folder_id": parent,
+                            "audit_project_id": "audit-proj",
+                            "prefix": "ent",
+                            "scc_tier": "STANDARD",
+                            "scc_scope": scc_scope,
+                            "environment_folder_ids": {"dev": "folders/11", "staging": "folders/22", "prod": "folders/33"},
+                        }),
+                        encoding="utf-8",
+                    )
+                    res = subprocess.run(
+                        [tf_bin, f"-chdir={scc_dir}", "console"],
+                        input="jsonencode({ parent_is_org = local.parent_is_org, is_org_scope = local.is_org_scope, is_folder_scope = local.is_folder_scope, effective_org_id_num = local.effective_org_id_num, parent_target_resource = local.parent_target_resource, mute_envs = sort(keys(local.nonprod_mute_folders)) })\n",
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(res.returncode, 0, res.stderr)
+                    self.assertEqual(json.loads(json.loads(res.stdout.strip())), expect)
+
 
 if __name__ == "__main__":
     unittest.main()

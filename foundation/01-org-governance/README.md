@@ -4,13 +4,13 @@ This stage deploys folders, the audit project, locked logging, FinOps, and Secur
 
 ## Resources Deployed
 
-- Root, `shared-infrastructure`, `workloads`, and `environments/{dev,staging,prod}` folders.
+- Direct `shared-infrastructure` and `environments/{dev,uat,staging,prod}` folders under `parent_id`.
 - `${prefix}-audit` project protected by a Resource Manager deletion lien and Stage-01 CMEK key.
 - Optional `${prefix}-cmn-finops` project for `"US"` billing export, multi-tier budgets, and email channels.
 - Optional `${prefix}-cmn-backup` project with an immutable Backup Vault and daily GCE/Cloud SQL plans.
 - Locked central audit log bucket with Log Analytics and BigQuery linked dataset.
 - Optional CMEK-encrypted SIEM Pub/Sub sink, Essential Contacts, and viewer IAM groups.
-- Optional 36-policy Org Policy baseline plus FinOps cost-allocation tag bindings.
+- Optional 38-policy Org Policy baseline plus FinOps cost-allocation tag bindings.
 - Tiered Security Command Center wiring via `modules/foundation/scc-secops` (`NONE`, `STANDARD`, or `PREMIUM`).
 
 ## Tiered Security Command Center
@@ -25,8 +25,8 @@ Only `STANDARD` (free) and `PREMIUM` (paid) remain active tiers.
 
 ## Org Policy Guardrails
 
-Set `enable_org_policies = true` to enforce 34 default folder policies out of the box.
-Add `allowed_policy_member_domains` and `allowed_contact_domains` to activate all 36 policies.
+Set `enable_org_policies = true` to enforce 36 default org or folder policies out of the box.
+Add `allowed_policy_member_domains` and `allowed_contact_domains` to activate all 38 policies.
 Set `dr_region` to add a second region to `gcp.resourceLocations`.
 
 ## Usage

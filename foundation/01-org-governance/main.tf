@@ -69,11 +69,7 @@ module "folder_hierarchy" {
   source = "../../modules/foundation/folder-hierarchy"
 
   parent_id           = var.parent_id
-  prefix              = var.prefix
-  folder_suffix       = local.effective_project_suffix
-  create_root_folder  = true
   deletion_protection = var.deletion_protection
-  workload_folders    = ["data-platform"]
   environments        = var.environments
 }
 

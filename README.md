@@ -36,7 +36,7 @@ gh repo create acme-corp/gcp-foundation --private --template choo737/gcp-foundat
 Deployed Google Cloud Resource Manager folder, project, and team ownership tree:
 
 ```text
-<prefix>-<suffix>-gcp-foundation [Folder] (CloudOps Admins / Security Admins)
+organizations/<org_id> (or folders/<parent_id>)
 ├── shared-infrastructure [Folder] (CloudOps Admins)
 │   ├── <prefix>-<suffix>-audit [Project] (CloudOps Admins / Security Admins)
 │   ├── <prefix>-<suffix>-cmn-secops [Project] (SecOps Analysts)
@@ -120,7 +120,7 @@ Create a private template repo first, link stages with scripts/link-stages.sh, a
 | `setup-customer-foundation` | `.agents/skills/setup-customer-foundation/SKILL.md` | Full private repo onboarding, intake, linking, and post-deploy verification |
 | `choose-entry-point` | `.agents/skills/choose-entry-point/SKILL.md` | Select Path 0-3 based on permissions and existing landing zone |
 | `add-data-domain` | `.agents/skills/add-data-domain/SKILL.md` | Add Gold domain projects and re-link `01-platform` to `02-governance-ops` |
-| `add-workload-pillar` | `.agents/skills/add-workload-pillar/SKILL.md` | Onboard new workload folders across `environments` or `workloads` |
+| `add-workload-pillar` | `.agents/skills/add-workload-pillar/SKILL.md` | Onboard new workload folders across `environments` or directly under `parent_id` |
 | `drift-safe-apply` | `.agents/skills/drift-safe-apply/SKILL.md` | Link outputs, inspect plans, and import pre-existing resources safely |
 
 ## CI/CD Workflows

@@ -24,7 +24,7 @@ Enforce phishing-resistant MFA on all human administrator and break-glass accoun
 Use `environments/<env>/<department>` as the primary `[Folder]` and `[Project]` hierarchy.
 
 ```text
-Root [Folder]: <prefix>-<suffix>-gcp-foundation
+organizations/<org_id> (or folders/<parent_id>)
 ├── shared-infrastructure [Folder]
 │   ├── <prefix>-<suffix>-audit [Project] (CloudOps / Security)
 │   ├── <prefix>-<suffix>-cmn-secops [Project] (SecOps Analysts)
@@ -32,7 +32,7 @@ Root [Folder]: <prefix>-<suffix>-gcp-foundation
 │   └── <prefix>-<suffix>-cmn-backup [Project] (CloudOps Admins)
 └── environments [Folder]
     └── {dev, uat, staging, prod} [Folder]
-        ├── <prefix>-<suffix>-network [Project] (Network Admins)
+        ├── network [Folder] -> <prefix>-<suffix>-network [Project] (Network Admins)
         ├── data-platform [Folder] -> storage / compute (Data Teams)
         ├── ai [Folder] -> ds-exp / ml-ops (AI Teams)
         └── app [Folder] -> <app_unit> -> <prefix>-<suffix>-app-<key> (App Teams)
@@ -71,7 +71,7 @@ Optionally attach `enable_siem_pubsub_sink = true` and `scc_siem_push_endpoint` 
 
 ## 5. Preventative Controls
 
-Enforce the 38-rule Org Policy baseline on the root folder via `enable_org_policies = true`.
+Enforce the 38-rule Org Policy baseline on the root organization or folder via `enable_org_policies = true`.
 Require Uniform Bucket-Level Access, disable service account keys, and restrict public IPs.
 Deploy VPC Service Controls (`enable_vpc_sc = true`) starting in `DRY_RUN` (`enforce_vpc_sc = false`).
 Promote `enforce_vpc_sc = true` only after verifying dry-run logs in Log Analytics.

@@ -42,8 +42,14 @@ class EnterpriseReadinessTest(unittest.TestCase):
     def test_multi_env_folder_hierarchy_and_stage_resolution(self) -> None:
         fh_main = (REPO_ROOT / "modules" / "foundation" / "folder-hierarchy" / "main.tf").read_text(encoding="utf-8")
         fh_out = (REPO_ROOT / "modules" / "foundation" / "folder-hierarchy" / "outputs.tf").read_text(encoding="utf-8")
+        self.assertIn('"shared-infrastructure"', fh_main)
         self.assertIn('"environments"', fh_main)
+        self.assertNotIn('resource "google_folder" "root"', fh_main)
+        self.assertNotIn('resource "google_folder" "workloads"', fh_main)
         for out_name in (
+            "parent_id",
+            "root_folder_id",
+            "shared_infra_folder_id",
             "environment_folder_ids",
             "environment_data_platform_folder_ids",
             "environment_storage_folder_ids",
@@ -52,9 +58,13 @@ class EnterpriseReadinessTest(unittest.TestCase):
             "compute_folder_id",
         ):
             self.assertIn(f'output "{out_name}"', fh_out)
+        self.assertNotIn('output "workloads_folder_id"', fh_out)
+        self.assertNotIn('output "workload_folder_ids"', fh_out)
 
         org_out = (REPO_ROOT / "foundation" / "01-org-governance" / "outputs.tf").read_text(encoding="utf-8")
         for out_name in (
+            "parent_id",
+            "root_folder_id",
             "environment_folder_ids",
             "environment_data_platform_folder_ids",
             "environment_storage_folder_ids",
