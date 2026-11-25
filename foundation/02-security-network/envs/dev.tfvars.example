@@ -1,0 +1,20 @@
+environment             = "dev"
+# network_folder_id       = "folders/000000000000" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+# shared_infra_folder_id  = "folders/000000000000" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+# billing_account         = "000000-000000-000000" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+prefix                  = "ent"
+project_suffix          = "" # Leave empty when auto_unique_suffix = true
+auto_unique_suffix      = true
+region                  = "asia-southeast1"
+project_deletion_policy = "DELETE"
+enable_cmek             = true
+kms_protection_level    = "SOFTWARE"
+enable_vpc              = true
+enable_shared_vpc_host  = false
+enable_vpc_flow_logs    = true
+vpc_flow_logs_sampling  = 0.5
+enable_dns_logging      = true
+enable_psc              = true
+enable_vpc_sc           = true
+enforce_vpc_sc          = false
+enable_alerts           = true

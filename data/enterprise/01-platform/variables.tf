@@ -1,0 +1,443 @@
+variable "data_folder_id" {
+  type        = string
+  default     = ""
+  description = "Parent data platform folder ID for brownfield fallback (numeric or folders/<id>)."
+}
+
+variable "create_data_subfolders" {
+  type        = bool
+  default     = false
+  description = "When false, data projects sit directly under fldr-<env>-data-platform; when true, creates fldr-<env>-storage and fldr-<env>-compute subfolders."
+}
+
+variable "environment_data_folder_ids" {
+  type        = map(string)
+  default     = {}
+  description = "Optional map of environment names to fldr-<env>-data-platform folder IDs from stage 01."
+}
+
+variable "storage_folder_id" {
+  type        = string
+  default     = ""
+  description = "Optional existing storage subfolder ID overriding subfolder creation."
+}
+
+variable "compute_folder_id" {
+  type        = string
+  default     = ""
+  description = "Optional existing compute subfolder ID overriding subfolder creation."
+}
+
+variable "environment_storage_folder_ids" {
+  type        = map(string)
+  default     = {}
+  description = "Optional map of environment names to storage folder IDs from stage 01."
+}
+
+variable "environment_compute_folder_ids" {
+  type        = map(string)
+  default     = {}
+  description = "Optional map of environment names to compute folder IDs from stage 01."
+}
+
+variable "split_etl_project" {
+  type        = bool
+  default     = false
+  description = "When false, runs ETL services, Artifact Registry, Dataform, and ETL slot assignments inside data-core; when true, creates a dedicated prj-<env>-data-etl-<suffix> project."
+}
+
+variable "environment" {
+  type        = string
+  default     = "dev"
+  description = "Target lifecycle environment name (for example dev, uat, prod)."
+
+  validation {
+    condition     = can(regex("^[a-z0-9-]+$", var.environment))
+    error_message = "environment must be lowercase alphanumeric or hyphens."
+  }
+}
+
+variable "billing_account" {
+  type        = string
+  description = "Cloud Billing account ID attached to enterprise data projects."
+}
+
+variable "domain_billing_accounts" {
+  type        = map(string)
+  default     = {}
+  description = "Optional map of domain codes to dedicated Cloud Billing account IDs overriding var.billing_account."
+
+  validation {
+    condition     = alltrue([for v in values(var.domain_billing_accounts) : trimspace(v) != ""])
+    error_message = "Every value in domain_billing_accounts must be a non-empty Cloud Billing account ID."
+  }
+}
+
+variable "prefix" {
+  type        = string
+  default     = "ent"
+  description = "Short prefix (3 to 8 lowercase chars) for enterprise projects and datasets."
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{1,6}[a-z0-9]$", var.prefix))
+    error_message = "prefix must be 3-8 lowercase letters/digits/hyphens and start/end with alphanumeric."
+  }
+}
+
+variable "project_suffix" {
+  type        = string
+  default     = ""
+  description = "Optional short suffix (1 to 4 chars) for globally unique project IDs."
+
+  validation {
+    condition     = var.project_suffix == "" || can(regex("^[a-z0-9]([a-z0-9-]{0,2}[a-z0-9])?$", var.project_suffix))
+    error_message = "project_suffix must be empty or 1-4 lowercase alphanumeric characters."
+  }
+}
+
+variable "auto_unique_suffix" {
+  type        = bool
+  default     = true
+  description = "When true and project_suffix is empty, appends a deterministic 4-hex code to project IDs."
+}
+
+variable "region" {
+  type        = string
+  default     = "asia-southeast1"
+  description = "Default GCP region for storage, governance, and BigQuery compute."
+}
+
+variable "dr_region" {
+  type        = string
+  default     = null
+  description = "Optional disaster recovery GCP region for secondary dataset targets."
+}
+
+variable "enable_dr_datasets" {
+  type        = bool
+  default     = false
+  description = "Whether to provision secondary BigQuery datasets in dr_region."
+}
+
+variable "kms_key_id" {
+  type        = string
+  default     = ""
+  description = "Optional regional CMEK crypto key resource ID from foundation stage 02."
+}
+
+variable "manage_kms_iam" {
+  type        = bool
+  default     = true
+  description = "Whether Terraform manages Cloud KMS IAM bindings on kms_key_id and dr_kms_key_id."
+}
+
+variable "dr_kms_key_id" {
+  type        = string
+  default     = ""
+  description = "Optional secondary DR CMEK crypto key resource ID from foundation stage 02."
+}
+
+variable "shared_vpc_host_project_id" {
+  type        = string
+  default     = ""
+  description = "Optional Shared VPC host project ID from foundation stage 02."
+}
+
+variable "vpc_id" {
+  type        = string
+  default     = ""
+  description = "Optional VPC network resource ID linked from foundation stage 02."
+}
+
+variable "subnet_id" {
+  type        = string
+  default     = ""
+  description = "Optional private subnetwork resource ID linked from foundation stage 02."
+}
+
+variable "datastream_network_attachment_id" {
+  type        = string
+  default     = ""
+  description = "Optional Datastream PSC network attachment ID linked from stage 02."
+}
+
+variable "vpc_sc_perimeter_name" {
+  type        = string
+  default     = ""
+  description = "Optional full VPC-SC service perimeter name for additive data project attachment."
+}
+
+variable "enforce_vpc_sc" {
+  type        = bool
+  default     = false
+  description = "Whether the VPC-SC perimeter is in enforced mode instead of dry-run mode."
+}
+
+variable "manage_vpc_sc" {
+  type        = bool
+  default     = true
+  description = "Whether Terraform manages additive VPC-SC perimeter resources and ingress policies."
+}
+
+variable "domain_marts" {
+  type        = set(string)
+  default     = ["fin"]
+  description = "Short domain codes for dedicated Gold mart storage projects."
+
+  validation {
+    condition     = length(var.domain_marts) >= 1 && alltrue([for d in var.domain_marts : can(regex("^[a-z0-9]{2,6}$", d))])
+    error_message = "domain_marts must have at least one 2-6 character lowercase alphanumeric code."
+  }
+}
+
+variable "primary_domain" {
+  type        = string
+  default     = "fin"
+  description = "Primary domain code in var.domain_marts used for primary Gold outputs."
+}
+
+variable "masking_expression" {
+  type        = string
+  default     = "LAST_FOUR_CHARACTERS"
+  description = "BigQuery predefined data masking expression attached to pii_masked."
+}
+
+variable "immutable_image_tags" {
+  type        = bool
+  default     = true
+  description = "Whether Artifact Registry enforces immutable Docker image tags in prod."
+}
+
+variable "deletion_protection" {
+  type        = bool
+  default     = true
+  description = "Whether storage and compute folders enforce deletion protection."
+}
+
+variable "project_deletion_policy" {
+  type        = string
+  default     = "PREVENT"
+  description = "Project deletion policy (PREVENT, DELETE, or ABANDON)."
+}
+
+variable "delete_contents_on_destroy" {
+  type        = bool
+  default     = false
+  description = "Whether destroy removes tables, repositories, and landing objects."
+}
+
+variable "soft_delete_retention_seconds" {
+  type        = number
+  default     = 1209600
+  description = "GCS soft-delete retention in seconds (1209600 = 14 days, 2592000 = 30 days; 0 disables or 604800..7776000)."
+
+  validation {
+    condition     = var.soft_delete_retention_seconds == 0 || (var.soft_delete_retention_seconds >= 604800 && var.soft_delete_retention_seconds <= 7776000)
+    error_message = "soft_delete_retention_seconds must be 0 or between 604800 (7 days) and 7776000 (90 days)."
+  }
+}
+
+variable "enable_dual_region_gcs" {
+  type        = bool
+  default     = false
+  description = "Whether to provision the landing bucket as a custom dual-region bucket."
+}
+
+variable "dual_region_location" {
+  type        = string
+  default     = ""
+  description = "Optional explicit GCS multi-region location code (ASIA, AU, CA, DE, EU, IN, IT, US) when enable_dual_region_gcs is true."
+}
+
+variable "dual_region_data_locations" {
+  type        = list(string)
+  default     = []
+  description = "Two GCS regions (for example [\"asia-southeast1\", \"asia-east1\"]; GCS excludes asia-southeast2 and asia-east2 from ASIA dual-regions) when enable_dual_region_gcs is true."
+}
+
+variable "gcs_rpo" {
+  type        = string
+  default     = "DEFAULT"
+  description = "Replication RPO mode for dual-region landing bucket (DEFAULT or ASYNC_TURBO)."
+
+  validation {
+    condition     = contains(["DEFAULT", "ASYNC_TURBO"], var.gcs_rpo)
+    error_message = "gcs_rpo must be DEFAULT or ASYNC_TURBO."
+  }
+}
+
+variable "ephemeral_table_expiration_ms" {
+  type        = number
+  default     = 7776000000
+  description = "Default table expiration in ms for quarantine and assertion datasets (90 days)."
+}
+
+variable "ephemeral_partition_expiration_ms" {
+  type        = number
+  default     = 7776000000
+  description = "Default partition expiration in ms for quarantine and assertion datasets (90 days)."
+}
+
+variable "enable_reservations" {
+  type        = bool
+  default     = true
+  description = "Whether to provision BigQuery Enterprise slot reservations."
+}
+
+variable "reservation_edition" {
+  type        = string
+  default     = "ENTERPRISE"
+  description = "BigQuery reservation edition (STANDARD, ENTERPRISE, or ENTERPRISE_PLUS)."
+
+  validation {
+    condition     = contains(["STANDARD", "ENTERPRISE", "ENTERPRISE_PLUS"], var.reservation_edition)
+    error_message = "reservation_edition must be STANDARD, ENTERPRISE, or ENTERPRISE_PLUS."
+  }
+}
+
+variable "reservation_secondary_location" {
+  type        = string
+  default     = ""
+  description = "Optional secondary DR location for ENTERPRISE_PLUS BigQuery slot reservations."
+}
+
+variable "baseline_slots" {
+  type        = number
+  default     = 0
+  description = "Reference baseline slots setting for environment template overrides."
+}
+
+variable "max_slots" {
+  type        = number
+  default     = 100
+  description = "Reference max autoscale slots setting for environment template overrides."
+}
+
+variable "etl_baseline_slots" {
+  type        = number
+  default     = null
+  description = "Optional baseline slot capacity override for the ETL reservation."
+}
+
+variable "etl_max_slots" {
+  type        = number
+  default     = null
+  description = "Optional autoscale max_slots override for the ETL reservation."
+}
+
+variable "bi_baseline_slots" {
+  type        = number
+  default     = null
+  description = "Optional baseline slot capacity override for the BI reservation."
+}
+
+variable "bi_max_slots" {
+  type        = number
+  default     = null
+  description = "Optional autoscale max_slots override for the BI reservation."
+}
+
+variable "adhoc_baseline_slots" {
+  type        = number
+  default     = null
+  description = "Optional baseline slot capacity override for the adhoc reservation."
+}
+
+variable "adhoc_max_slots" {
+  type        = number
+  default     = null
+  description = "Optional autoscale max_slots override for the adhoc reservation."
+}
+
+variable "reservation_assignments" {
+  type        = map(string)
+  default     = {}
+  description = "Optional extra or override reservation assignments keyed by project ID."
+}
+
+variable "propagation_wait_seconds" {
+  type        = string
+  default     = "30s"
+  description = "Wait duration after project API activation and KMS IAM grants."
+}
+
+variable "masked_readers" {
+  type        = list(string)
+  default     = []
+  description = "IAM members granted masked reader access on Gold PII columns."
+}
+
+variable "fine_grained_readers" {
+  type        = list(string)
+  default     = []
+  description = "IAM members granted unmasked fine-grained reader access."
+}
+
+variable "bi_analysts" {
+  type        = list(string)
+  default     = []
+  description = "BI analyst principals granted Gold viewer access, jobUser on data-bi, and masked reads."
+}
+
+variable "bi_analysts_group" {
+  type        = string
+  default     = ""
+  description = "Optional Google Group email or member string for BI analysts."
+}
+
+variable "data_engineers_group" {
+  type        = string
+  default     = ""
+  description = "Optional Google Group email or member string for data engineers."
+}
+
+variable "governance_stewards_group" {
+  type        = string
+  default     = ""
+  description = "Optional Google Group email or member string for data governance stewards."
+}
+
+variable "break_glass_admins_group" {
+  type        = string
+  default     = ""
+  description = "Optional Google Group email or member string for break-glass emergency admins."
+}
+
+variable "env_groups" {
+  type        = map(string)
+  default     = {}
+  description = "Optional map of environment names (dev, uat, prod) to collaborator Google Groups."
+}
+
+variable "batch_loader_sa_email" {
+  type        = string
+  default     = ""
+  description = "Optional Cloud Run batch loader service account granted Artifact Registry reader and VPC-SC ingress."
+}
+
+variable "shared_artifact_registry_id" {
+  type        = string
+  default     = ""
+  description = "Optional shared golden Artifact Registry repository ID linked from stage 01."
+}
+
+variable "dataform_sa_email" {
+  type        = string
+  default     = ""
+  description = "Optional Dataform service account email added to the VPC-SC ingress policy."
+}
+
+variable "finops_tag_value_ids" {
+  type        = map(string)
+  default     = {}
+  description = "Optional Resource Manager FinOps tag value IDs linked from stage 01."
+}
+
+variable "labels" {
+  type = map(string)
+  default = {
+    environment = "enterprise"
+    managed_by  = "terraform"
+  }
+  description = "Labels applied to enterprise data platform resources."
+}

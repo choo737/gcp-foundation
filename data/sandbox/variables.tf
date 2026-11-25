@@ -1,0 +1,178 @@
+variable "project_id" {
+  type        = string
+  description = "Sandbox GCP project ID where BigQuery, Knowledge Catalog, and Dataform run."
+}
+
+variable "region" {
+  type        = string
+  default     = "asia-southeast1"
+  description = "GCP region for datasets, governance tags, scans, and Dataform."
+}
+
+variable "prefix" {
+  type        = string
+  default     = "bqfnd"
+  description = "Name prefix applied to sandbox datasets, policies, and Dataform resources."
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{1,14}[a-z0-9]$", var.prefix))
+    error_message = "prefix must be 3-16 lowercase letters/digits/hyphens and start/end with alphanumeric."
+  }
+}
+
+variable "environment" {
+  type        = string
+  default     = "sandbox"
+  description = "Environment label passed to Dataform release and workflow configs."
+}
+
+variable "auto_unique_suffix" {
+  type        = bool
+  default     = true
+  description = "When true, computes a deterministic 4-hex code for uniqueness metadata."
+}
+
+variable "medallion_git_url" {
+  type        = string
+  default     = "https://github.com/choo737/gcp-data-medallion.git"
+  description = "Public Git remote URL for the Medallion Dataform repository."
+}
+
+variable "medallion_git_branch" {
+  type        = string
+  default     = "main"
+  description = "Git branch tracked by the Dataform repository."
+}
+
+variable "git_release_commitish" {
+  type        = string
+  default     = "main"
+  description = "Git branch, tag, or commit SHA compiled by the Dataform release config."
+}
+
+variable "git_token_secret_version" {
+  type        = string
+  default     = ""
+  description = "Secret Manager secret version for Dataform Git sync (empty uses standalone mode)."
+
+  validation {
+    condition     = var.git_token_secret_version == "" || can(regex("^projects/[^/]+/secrets/[^/]+/versions/[^/]+$", var.git_token_secret_version))
+    error_message = "git_token_secret_version must be empty or projects/<project>/secrets/<secret>/versions/<version>."
+  }
+}
+
+variable "kms_key_name" {
+  type        = string
+  default     = ""
+  description = "Optional Cloud KMS key ID for BigQuery, Artifact Registry, GCS, and Dataform encryption."
+}
+
+variable "manage_kms_iam" {
+  type        = bool
+  default     = true
+  description = "Whether Terraform manages Cloud KMS IAM bindings on kms_key_name."
+}
+
+variable "immutable_image_tags" {
+  type        = bool
+  default     = false
+  description = "Whether Artifact Registry enforces immutable Docker image tags."
+}
+
+variable "batch_loader_sa_email" {
+  type        = string
+  default     = ""
+  description = "Optional Cloud Run batch loader service account granted Artifact Registry reader."
+}
+
+variable "masking_expression" {
+  type        = string
+  default     = "LAST_FOUR_CHARACTERS"
+  description = "BigQuery predefined data masking expression attached to pii_masked."
+}
+
+variable "masked_readers" {
+  type        = list(string)
+  default     = []
+  description = "IAM members granted masked reader access on Gold PII columns."
+}
+
+variable "fine_grained_readers" {
+  type        = list(string)
+  default     = []
+  description = "IAM members granted unmasked fine-grained reader access."
+}
+
+variable "delete_contents_on_destroy" {
+  type        = bool
+  default     = false
+  description = "Whether destroy drops tables, landing objects, and dataset contents in the sandbox."
+}
+
+variable "soft_delete_retention_seconds" {
+  type        = number
+  default     = 1209600
+  description = "GCS soft-delete retention in seconds (1209600 = 14 days; 0 disables or 604800..7776000)."
+
+  validation {
+    condition     = var.soft_delete_retention_seconds == 0 || (var.soft_delete_retention_seconds >= 604800 && var.soft_delete_retention_seconds <= 7776000)
+    error_message = "soft_delete_retention_seconds must be 0 or between 604800 (7 days) and 7776000 (90 days)."
+  }
+}
+
+variable "ephemeral_table_expiration_ms" {
+  type        = number
+  default     = 7776000000
+  description = "Default table expiration in ms for quarantine and assertion datasets (90 days)."
+}
+
+variable "ephemeral_partition_expiration_ms" {
+  type        = number
+  default     = 7776000000
+  description = "Default partition expiration in ms for quarantine and assertion datasets (90 days)."
+}
+
+variable "enable_scheduled_workflow" {
+  type        = bool
+  default     = false
+  description = "Whether to enable a daily Dataform workflow schedule in the sandbox."
+}
+
+variable "enable_quality_scan" {
+  type        = bool
+  default     = true
+  description = "Whether to provision the Knowledge Catalog data quality scan on silver.fct_orders."
+}
+
+variable "quality_target_table_id" {
+  type        = string
+  default     = "fct_orders"
+  description = "BigQuery table ID in silver_curated targeted by the Knowledge Catalog data quality scan."
+}
+
+variable "quality_results_table" {
+  type        = string
+  default     = ""
+  description = "Optional full BigQuery resource URI for Knowledge Catalog quality results export."
+}
+
+variable "propagation_wait_seconds" {
+  type        = string
+  default     = "30s"
+  description = "Wait duration after API activation before creating dependent resources."
+}
+
+variable "dataplex_iam_propagation_seconds" {
+  type        = string
+  default     = "90s"
+  description = "Wait duration after Knowledge Catalog maskedReader IAM binding before creating data scans."
+}
+
+variable "labels" {
+  type = map(string)
+  default = {
+    environment = "sandbox"
+    managed_by  = "terraform"
+  }
+  description = "Labels applied to sandbox resources."
+}

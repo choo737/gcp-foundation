@@ -1,0 +1,25 @@
+environment             = "prod"
+# network_folder_id       = "folders/000000000000" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+# shared_infra_folder_id  = "folders/000000000000" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+# billing_account         = "000000-000000-000000" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+prefix                  = "ent"
+project_suffix          = "" # Leave empty when auto_unique_suffix = true
+auto_unique_suffix      = true
+region                  = "asia-southeast1"
+project_deletion_policy = "PREVENT"
+enable_cmek             = true
+kms_protection_level    = "HSM"
+enable_vpc              = true
+enable_shared_vpc_host  = true
+enable_vpc_flow_logs    = true
+vpc_flow_logs_sampling  = 1.0
+enable_dns_logging      = true
+enable_psc              = true
+enable_vpc_sc           = true
+enforce_vpc_sc          = false # Flip to true only after all stages join the dry-run perimeter and ingress principals are verified
+enable_alerts           = true
+
+enable_hierarchical_firewall_policy = true
+enable_ngfw_standard_rules          = true
+enable_secure_tags                  = true
+enable_ngfw_enterprise              = false

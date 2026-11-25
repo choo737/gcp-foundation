@@ -1,0 +1,25 @@
+environment                = "uat"
+# data_folder_id             = "folders/000000000000" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+# billing_account            = "000000-000000-000000" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+prefix                     = "ent"
+project_suffix             = "" # Leave empty when auto_unique_suffix = true
+auto_unique_suffix         = true
+region                     = "asia-southeast1"
+# kms_key_id                 = "" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+domain_marts               = ["fin"]
+deletion_protection        = false
+project_deletion_policy    = "DELETE"
+delete_contents_on_destroy = false
+enable_reservations        = true
+baseline_slots             = 0
+max_slots                  = 200
+etl_baseline_slots         = 0
+etl_max_slots              = 200
+bi_baseline_slots          = 0
+bi_max_slots               = 200
+adhoc_baseline_slots       = 0
+adhoc_max_slots            = 100
+enforce_vpc_sc             = false
+immutable_image_tags       = false
+masked_readers             = ["user:analyst@example.com"]
+bi_analysts                = ["user:bi-viewer@example.com"]

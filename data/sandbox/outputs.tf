@@ -1,0 +1,124 @@
+output "project_id" {
+  value       = var.project_id
+  description = "Sandbox GCP project ID."
+}
+
+output "region" {
+  value       = var.region
+  description = "Sandbox GCP region."
+}
+
+output "prefix" {
+  value       = var.prefix
+  description = "Sandbox naming prefix."
+}
+
+output "project_number" {
+  value       = data.google_project.current.number
+  description = "Numeric GCP project number for the sandbox project."
+}
+
+output "landing_bucket_name" {
+  value       = google_storage_bucket.landing.name
+  description = "Sandbox raw ingestion landing Cloud Storage bucket name."
+}
+
+output "artifact_registry_repository_uri" {
+  value       = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.ingestion.repository_id}"
+  description = "Docker Artifact Registry URI for sandbox ingestion containers."
+}
+
+output "dataset_ids" {
+  value       = { for k, m in module.datasets : k => m.dataset_id }
+  description = "Map of Medallion layer keys to created BigQuery dataset IDs."
+}
+
+output "bronze_dataset_id" {
+  value       = module.datasets["bronze_raw"].dataset_id
+  description = "Sandbox Bronze BigQuery dataset ID."
+}
+
+output "silver_dataset_id" {
+  value       = module.datasets["silver_curated"].dataset_id
+  description = "Sandbox Silver BigQuery dataset ID."
+}
+
+output "quarantine_dataset_id" {
+  value       = module.datasets["quarantine"].dataset_id
+  description = "Sandbox quarantine BigQuery dataset ID."
+}
+
+output "ops_telemetry_dataset_id" {
+  value       = module.datasets["ops_telemetry"].dataset_id
+  description = "Sandbox operational telemetry BigQuery dataset ID."
+}
+
+output "taxonomy_id" {
+  value       = module.governance_catalog.taxonomy_id
+  description = "BigQuery Policy Tags PII taxonomy ID."
+}
+
+output "pii_restricted_policy_tag_id" {
+  value       = module.governance_catalog.pii_restricted_policy_tag_id
+  description = "Resource name of the restricted PII policy tag."
+}
+
+output "pii_masked_policy_tag_id" {
+  value       = module.governance_catalog.pii_masked_policy_tag_id
+  description = "Resource name of the masked PII policy tag."
+}
+
+output "pii_data_policy_id" {
+  value       = module.governance_catalog.pii_data_policy_id
+  description = "Resource ID of the BigQuery PII data masking policy."
+}
+
+output "glossary_id" {
+  value       = module.governance_catalog.glossary_id
+  description = "Knowledge Catalog business glossary resource ID."
+}
+
+output "dataplex_scan_names" {
+  value       = module.dataplex_scans.scan_names
+  description = "Map of Knowledge Catalog data profile scan resource names."
+}
+
+output "quality_scan_id" {
+  value       = module.dataplex_scans.quality_scan_id
+  description = "Knowledge Catalog data quality scan ID for Silver orders."
+}
+
+output "dataplex_quality_scan_id" {
+  value       = module.dataplex_scans.dataplex_quality_scan_id
+  description = "Alias of quality_scan_id for downstream orchestration stages."
+}
+
+output "dataform_repository_name" {
+  value       = module.dataform_repository.repository_name
+  description = "Dataform repository short name."
+}
+
+output "dataform_release_config_name" {
+  value       = module.dataform_repository.release_config_name
+  description = "Dataform release configuration name."
+}
+
+output "dataform_workflow_config_name" {
+  value       = module.dataform_repository.workflow_config_name
+  description = "Dataform workflow configuration name."
+}
+
+output "dataform_service_account_email" {
+  value       = module.dataform_repository.service_account_email
+  description = "Dedicated Dataform ETL service account email."
+}
+
+output "dataform_service_agent_email" {
+  value       = google_project_service_identity.dataform_agent.email
+  description = "Google-managed Dataform service agent email."
+}
+
+output "dataplex_service_agent_email" {
+  value       = google_project_service_identity.dataplex_agent.email
+  description = "Google-managed Knowledge Catalog service agent email."
+}

@@ -1,0 +1,26 @@
+enable_data_science        = true
+team_size_tier             = "S"
+compliance_profile         = "sandbox_poc"
+environment                = "dev"
+region                     = "asia-southeast1"
+prefix                     = "ent"
+project_suffix             = "" # Leave empty when auto_unique_suffix = true
+auto_unique_suffix         = true
+# billing_account            = "000000-000000-000000" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+# etl_compute_project_id     = "prj-dev-data-core-9f2a" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+# governance_project_id      = "prj-dev-data-gov-9f2a" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+# core_storage_project_id    = "prj-dev-data-core-9f2a" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+# silver_dataset_id          = "ent_silver_curated" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+# primary_gold_project_id    = "prj-dev-data-fin-9f2a" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+# primary_gold_dataset_id    = "ent_gold_mart" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+# pii_data_policy_short_id   = "ent_pii_mask" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+# kms_key_id                 = "" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+# subnet_id                  = "" # Supplied by 00_linked.auto.tfvars.json (uncomment only for standalone override)
+enable_ds_workbench        = true
+enable_colab_enterprise    = false
+xai_audit_retention_days   = 30
+shap_additivity_tolerance  = 0.00001
+enable_xai_quality_scan    = true
+enforce_vpc_sc             = false
+project_deletion_policy    = "DELETE"
+delete_contents_on_destroy = true
